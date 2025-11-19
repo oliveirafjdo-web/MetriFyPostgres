@@ -281,7 +281,7 @@ def importar_vendas_template(caminho_arquivo: str, engine: Engine):
     if not colunas_obrig.issubset(set(df.columns)):
         raise ValueError(
             "Planilha não está no formato esperado. Colunas obrigatórias: "
-            ""'SKU, Título, Quantidade, Receita, Comissao, PrecoMedio'."
+            "'SKU, Título, Quantidade, Receita, Comissao, PrecoMedio'."
         )
 
     vendas_importadas = 0
