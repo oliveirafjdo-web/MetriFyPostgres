@@ -6,11 +6,15 @@ ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt-get install -y build-essential libpq-dev gcc && rm -rf /var/lib/apt/lists/*
 
+COPY app.py .
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY Procfile .
+COPY templates ./templates
 
-COPY . .
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
-EXPOSE 10000
+RUN mkdir -p uploads
 
-CMD ["gunicorn", "-b", "0.0.0.0:10000", "app:app"]
+EXPOSE 5000
+
+CMD ["python", "app.py"]

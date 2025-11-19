@@ -1,28 +1,34 @@
-{% extends "layout.html" %}
-{% block conteudo %}
-<h2>Produtos</h2>
+{% extends "base.html" %}
+{% block content %}
+<h1>Produtos</h1>
 
-<a href="{{ url_for('novo_produto') }}" class="btn btn-primary mb-3">Novo Produto</a>
+<p><a class="btn btn-primary" href="{{ url_for('novo_produto') }}">+ Novo produto</a></p>
 
-<table class="table table-striped">
+<table>
   <thead>
     <tr>
       <th>Nome</th>
       <th>SKU</th>
-      <th>Custo</th>
+      <th>Custo (R$)</th>
+      <th>Preço sugerido (R$)</th>
       <th>Estoque atual</th>
-      <th></th>
+      <th>Ações</th>
     </tr>
   </thead>
   <tbody>
     {% for p in produtos %}
     <tr>
-      <td>{{ p.nome }}</td>
-      <td>{{ p.sku }}</td>
-      <td>R$ {{ '%.2f'|format(p.custo_unitario or 0) }}</td>
-      <td>{{ p.estoque_atual }}</td>
+      <td>{{ p['nome'] }}</td>
+      <td>{{ p['sku'] }}</td>
+      <td>{{ '%.2f'|format(p['custo_unitario']) }}</td>
+      <td>{{ '%.2f'|format(p['preco_venda_sugerido']) }}</td>
+      <td>{{ p['estoque_atual'] }}</td>
       <td>
-        <a href="{{ url_for('editar_produto', produto_id=p.id) }}" class="btn btn-sm btn-secondary">Editar</a>
+        <a href="{{ url_for('editar_produto', produto_id=p['id']) }}">Editar</a>
+        |
+        <form class="inline" method="post" action="{{ url_for('excluir_produto', produto_id=p['id']) }}" onsubmit="return confirm('Excluir produto?');">
+          <button class="btn-link" type="submit">Excluir</button>
+        </form>
       </td>
     </tr>
     {% endfor %}

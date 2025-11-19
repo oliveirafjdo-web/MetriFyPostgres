@@ -1,91 +1,74 @@
-{% extends "layout.html" %}
-{% block conteudo %}
-<h2>Dashboard</h2>
+{% extends "base.html" %}
+{% block content %}
+<h1>Dashboard</h1>
 
-<div class="row mt-3">
-  <div class="col-3">
-    <div class="card p-3">
-      <h6>Total de Produtos</h6>
-      <h3>{{ total_produtos }}</h3>
-    </div>
+<div class="card-grid">
+  <div class="card">
+    <div>Total de Produtos</div>
+    <h2>{{ total_produtos }}</h2>
   </div>
-  <div class="col-3">
-    <div class="card p-3">
-      <h6>Estoque Total</h6>
-      <h3>{{ estoque_total }}</h3>
-    </div>
+  <div class="card">
+    <div>Estoque Total</div>
+    <h2>{{ estoque_total }}</h2>
   </div>
-  <div class="col-3">
-    <div class="card p-3">
-      <h6>Receita Total</h6>
-      <h3>R$ {{ '%.2f'|format(receita_total) }}</h3>
-    </div>
+  <div class="card">
+    <div>Receita Total</div>
+    <h2>R$ {{ '%.2f'|format(receita_total) }}</h2>
   </div>
-  <div class="col-3">
-    <div class="card p-3">
-      <h6>Lucro Total</h6>
-      <h3>R$ {{ '%.2f'|format(lucro_total) }}</h3>
-    </div>
+  <div class="card">
+    <div>Lucro Total</div>
+    <h2>R$ {{ '%.2f'|format(lucro_total) }}</h2>
+  </div>
+  <div class="card">
+    <div>Margem média</div>
+    <h2>{{ '%.2f'|format(margem_media) }}%</h2>
+  </div>
+  <div class="card">
+    <div>Ticket médio</div>
+    <h2>R$ {{ '%.2f'|format(ticket_medio) }}</h2>
+  </div>
+  <div class="card">
+    <div>Comissão total</div>
+    <h2>R$ {{ '%.2f'|format(comissao_total) }}</h2>
   </div>
 </div>
 
-<div class="row mt-3">
-  <div class="col-3">
-    <div class="card p-3">
-      <h6>Margem Média</h6>
-      <h3>{{ '%.2f'|format(margem_media) }}%</h3>
-    </div>
+<div class="card-grid">
+  <div class="card">
+    <h3>Produto mais vendido</h3>
+    {% if produto_mais_vendido %}
+      <div>{{ produto_mais_vendido[0] }}</div>
+      <small>Qtd: {{ produto_mais_vendido[1] }}</small>
+    {% else %}
+      <small>Sem vendas ainda.</small>
+    {% endif %}
   </div>
-  <div class="col-3">
-    <div class="card p-3">
-      <h6>Ticket Médio</h6>
-      <h3>R$ {{ '%.2f'|format(ticket_medio) }}</h3>
-    </div>
+  <div class="card">
+    <h3>Maior lucro</h3>
+    {% if produto_maior_lucro %}
+      <div>{{ produto_maior_lucro[0] }}</div>
+      <small>Lucro: R$ {{ '%.2f'|format(produto_maior_lucro[1]) }}</small>
+    {% else %}
+      <small>Sem vendas ainda.</small>
+    {% endif %}
   </div>
-  <div class="col-3">
-    <div class="card p-3">
-      <h6>Comissão Total</h6>
-      <h3>R$ {{ '%.2f'|format(comissao_total) }}</h3>
-    </div>
+  <div class="card">
+    <h3>Pior margem</h3>
+    {% if produto_pior_margem %}
+      <div>{{ produto_pior_margem[0] }}</div>
+      <small>Margem: R$ {{ '%.2f'|format(produto_pior_margem[1]) }}</small>
+    {% else %}
+      <small>Sem vendas ainda.</small>
+    {% endif %}
   </div>
-  <div class="col-3">
-    <div class="card p-3">
-      <h6>Configurações</h6>
-      <div>Imposto: {{ cfg.imposto_percent }}%</div>
-      <div>Despesas: {{ cfg.despesas_percent }}%</div>
-    </div>
-  </div>
-</div>
-
-{% if produto_mais_vendido or produto_maior_lucro or produto_pior_margem %}
-<div class="row mt-4">
-  <div class="col-4">
-    <div class="card p-3">
-      <h6>Produto mais vendido</h6>
-      {% if produto_mais_vendido %}
-        {{ produto_mais_vendido.nome }} ({{ produto_mais_vendido.qtd }} un.)
-      {% else %}-
-      {% endif %}
-    </div>
-  </div>
-  <div class="col-4">
-    <div class="card p-3">
-      <h6>Maior lucro</h6>
-      {% if produto_maior_lucro %}
-        {{ produto_maior_lucro.nome }}
-      {% else %}-
-      {% endif %}
-    </div>
-  </div>
-  <div class="col-4">
-    <div class="card p-3">
-      <h6>Pior margem</h6>
-      {% if produto_pior_margem %}
-        {{ produto_pior_margem.nome }}
-      {% else %}-
-      {% endif %}
-    </div>
+  <div class="card">
+    <h3>Configurações</h3>
+    {% if cfg %}
+      <div class="small">Imposto: {{ '%.2f'|format(cfg.imposto_percent) }}%</div>
+      <div class="small">Despesas: {{ '%.2f'|format(cfg.despesas_percent) }}%</div>
+    {% else %}
+      <div class="small">Sem configurações.</div>
+    {% endif %}
   </div>
 </div>
-{% endif %}
 {% endblock %}

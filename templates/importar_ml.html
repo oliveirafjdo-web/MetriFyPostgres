@@ -1,19 +1,36 @@
-{% extends "layout.html" %}
-{% block conteudo %}
-<h2>Importar Vendas</h2>
+{% extends "base.html" %}
+{% block content %}
+<h1>Importar vendas do Mercado Livre</h1>
 
-<form method="POST" enctype="multipart/form-data">
-  <div class="mb-3">
-    <label>Arquivo (.xlsx)</label>
-    <input type="file" name="arquivo" class="form-control">
+<p>Envie o relatório oficial de <strong>Vendas BR</strong> do Mercado Livre (.xlsx), sem editar.</p>
+<p class="small">O sistema tenta encontrar o produto pelo <strong>SKU</strong>. Se o SKU estiver vazio, tenta pelo <strong>Título do anúncio = nome do produto</strong>.</p>
+
+<form method="post" enctype="multipart/form-data">
+  <div class="form-group">
+    <label for="arquivo">Arquivo (.xlsx)</label>
+    <input type="file" id="arquivo" name="arquivo" accept=".xlsx,.xls" required>
   </div>
-  <div class="mb-3">
-    <label>Tipo de importação</label>
-    <select name="tipo" class="form-control">
-      <option value="ml">Mercado Livre - Vendas BR</option>
-      <option value="template">Template consolidado</option>
-    </select>
-  </div>
-  <button class="btn btn-success">Importar</button>
+  <button class="btn btn-primary" type="submit">Importar</button>
 </form>
+
+<hr>
+
+<h2>Importar consolidação (Template)</h2>
+<p>Use a planilha de modelo preenchida manualmente (SKU, Título, Quantidade, Receita, Comissao, PrecoMedio).</p>
+<form method="post" action="{{ url_for('importar_template') }}" enctype="multipart/form-data">
+  <div class="form-group">
+    <label for="arquivo_template">Arquivo do template (.xlsx)</label>
+    <input type="file" id="arquivo_template" name="arquivo_template" accept=".xlsx,.xls" required>
+  </div>
+  <button class="btn btn-primary" type="submit">Importar template</button>
+</form>
+
+<hr>
+
+<h2>Exportar consolidação</h2>
+<p>Baixar modelo vazio para preencher manualmente:</p>
+<a class="btn btn-primary" href="{{ url_for('exportar_template') }}">Baixar modelo</a>
+<br><br>
+<p>Gere uma planilha .xlsx com todas as vendas consolidadas.</p>
+<a class="btn btn-primary" href="{{ url_for('exportar_consolidado') }}">Exportar consolidação</a>
 {% endblock %}

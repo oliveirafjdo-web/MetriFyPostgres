@@ -1,26 +1,36 @@
-{% extends "layout.html" %}
-{% block conteudo %}
-<h2>{{ produto and 'Editar Produto' or 'Novo Produto' }}</h2>
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ 'Editar produto' if produto else 'Novo produto' }}</h1>
 
-<form method="POST">
-  <div class="mb-3">
+<form method="post">
+  <div class="form-group">
     <label>Nome</label>
-    <input type="text" name="nome" class="form-control" value="{{ produto.nome if produto }}">
+    <input type="text" name="nome" required value="{{ produto['nome'] if produto else '' }}">
   </div>
-  <div class="mb-3">
+  <div class="form-group">
     <label>SKU</label>
-    <input type="text" name="sku" class="form-control" value="{{ produto.sku if produto }}">
+    <input type="text" name="sku" value="{{ produto['sku'] if produto else '' }}">
   </div>
-  <div class="mb-3">
-    <label>Custo unitário</label>
-    <input type="text" name="custo_unitario" class="form-control" value="{{ produto.custo_unitario if produto }}">
+  <div class="form-group">
+    <label>Custo unitário (R$)</label>
+    <input type="number" step="0.01" name="custo_unitario" value="{{ produto['custo_unitario'] if produto else '0.00' }}">
   </div>
-  {% if not produto %}
-  <div class="mb-3">
+  <div class="form-group">
+    <label>Preço de venda sugerido (R$)</label>
+    <input type="number" step="0.01" name="preco_venda_sugerido" value="{{ produto['preco_venda_sugerido'] if produto else '0.00' }}">
+  </div>
+  {% if produto %}
+  <div class="form-group">
+    <label>Estoque atual</label>
+    <input type="number" name="estoque_atual" value="{{ produto['estoque_atual'] }}">
+  </div>
+  {% else %}
+  <div class="form-group">
     <label>Estoque inicial</label>
-    <input type="number" name="estoque_inicial" class="form-control">
+    <input type="number" name="estoque_inicial" value="0">
   </div>
   {% endif %}
-  <button class="btn btn-success">Salvar</button>
+  <button class="btn btn-primary" type="submit">Salvar</button>
+  <a href="{{ url_for('lista_produtos') }}">Cancelar</a>
 </form>
 {% endblock %}
