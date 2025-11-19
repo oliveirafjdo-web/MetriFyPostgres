@@ -176,24 +176,15 @@ def importar_vendas_ml(caminho_arquivo, engine: Engine):
             except Exception:
                 unidades = 0
 
-            receita_total = 0.0
-            # Receita bruta: prioriza a coluna "Receita por produtos (BRL)".
-            if "Receita por produtos (BRL)" in df.columns:
-                receita_total = parse_brl(row.get("Receita por produtos (BRL)"))
-            elif "Total (BRL)" in df.columns:
-                # fallback para o comportamento antigo, se necessário
-                receita_total = parse_brl(row.get("Total (BRL)"))
-
-            # Comissão / tarifas: coluna K "Tarifa de venda e impostos (BRL)".
-            comissao = 0.0
-            if "Tarifa de venda e impostos (BRL)" in df.columns:
-                comissao = parse_brl(row.get("Tarifa de venda e impostos (BRL)"))
+            total_brl = row.get("Total (BRL)")
+            try:
+                receita_total = float(total_brl) if total_brl == total_brl else 0.0
+            except Exception:
+                receita_total = 0.0
 
             preco_medio_venda = receita_total / unidades if unidades > 0 else 0.0
             custo_total = custo_unitario * unidades
-            margem_bruta = receita_total - custo_total
-            # Margem líquida: margem bruta menos comissão (na planilha vem negativa).
-            margem_contribuicao = margem_bruta + comissao
+            margem_contribuicao = receita_total - custo_total
             numero_venda_ml = str(row.get("N.º de venda"))
 
             conn.execute(
@@ -833,10 +824,11 @@ def configuracoes_view():
     return render_template("configuracoes.html", cfg=cfg)
 
 # ---------------- RELATÓRIO LUCRO ----------------
+
 @app.route("/relatorio_lucro")
 def relatorio_lucro():
     with engine.connect() as conn:
-        linhas = conn.execute(
+        linhas_db = conn.execute(
             select(
                 produtos.c.nome,
                 func.sum(vendas.c.quantidade).label("qtd"),
@@ -849,7 +841,59 @@ def relatorio_lucro():
             .order_by(func.sum(vendas.c.margem_contribuicao).desc())
         ).mappings().all()
 
-    return render_template("relatorio_lucro.html", linhas=linhas)
+        cfg = conn.execute(
+            select(configuracoes).where(configuracoes.c.id == 1)
+        ).mappings().first()
+
+    imposto_percent = float(cfg["imposto_percent"] or 0) if cfg else 0.0
+    despesas_percent = float(cfg["despesas_percent"] or 0) if cfg else 0.0
+
+    linhas = []
+    total_qtd = total_receita = total_custo = total_margem = 0.0
+    total_impostos = total_despesas = total_lucro_liquido = 0.0
+
+    for row in linhas_db:
+        receita = float(row["receita"] or 0)
+        custo = float(row["custo"] or 0)
+        margem = float(row["margem"] or 0)
+        qtd = int(row["qtd"] or 0)
+
+        impostos = receita * imposto_percent / 100.0
+        despesas = receita * despesas_percent / 100.0
+        lucro_liquido = margem - impostos - despesas
+
+        linhas.append({
+            "nome": row["nome"],
+            "qtd": qtd,
+            "receita": receita,
+            "custo": custo,
+            "margem": margem,
+            "impostos": impostos,
+            "despesas": despesas,
+            "lucro_liquido": lucro_liquido,
+        })
+
+        total_qtd += qtd
+        total_receita += receita
+        total_custo += custo
+        total_margem += margem
+        total_impostos += impostos
+        total_despesas += despesas
+        total_lucro_liquido += lucro_liquido
+
+    totais = {
+        "qtd": total_qtd,
+        "receita": total_receita,
+        "custo": total_custo,
+        "margem": total_margem,
+        "impostos": total_impostos,
+        "despesas": total_despesas,
+        "lucro_liquido": total_lucro_liquido,
+    }
+
+    return render_template("relatorio_lucro.html", linhas=linhas, totais=totais,
+                           imposto_percent=imposto_percent, despesas_percent=despesas_percent)
+
 
 if __name__ == "__main__":
     init_db()
