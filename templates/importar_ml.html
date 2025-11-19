@@ -16,6 +16,9 @@
 <hr>
 
 <h2>Exportar consolidação</h2>
+<p>Baixar modelo vazio para preencher manualmente:</p>
+<a class="btn btn-primary" href="{{ url_for('exportar_template') }}">Baixar modelo</a>
+<br><br>
 <p>Gere uma planilha .xlsx com todas as vendas consolidadas.</p>
 <a class="btn btn-primary" href="{{ url_for('exportar_consolidado') }}">Exportar consolidação</a>
 {% endblock %}

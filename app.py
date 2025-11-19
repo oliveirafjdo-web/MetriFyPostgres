@@ -573,6 +573,24 @@ def exportar_consolidado():
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
+
+
+@app.route("/exportar_template")
+def exportar_template():
+    """Exporta o modelo de planilha para preenchimento manual (SKU, Título, Quantidade, Receita, Comissao, PrecoMedio)."""
+    cols = ["SKU", "Título", "Quantidade", "Receita", "Comissao", "PrecoMedio"]
+    df = pd.DataFrame(columns=cols)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Template")
+    output.seek(0)
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name="template_consolidacao_vendas.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
 # ---------------- ESTOQUE / AJUSTES ----------------
 @app.route("/estoque")
 def estoque_view():
