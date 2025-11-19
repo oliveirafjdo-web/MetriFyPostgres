@@ -1,74 +1,29 @@
-{% extends "base.html" %}
-{% block content %}
-<h1>Dashboard</h1>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Dashboard</title>
+    <style>
+    body { font-family: Arial; padding:20px;}
+    .card { padding:20px; margin:10px; background:#f2f2f2; border-radius:10px; display:inline-block;}
+    </style>
+</head>
+<body>
+<h2>Dashboard - MetriFy 5.1</h2>
 
-<div class="card-grid">
-  <div class="card">
-    <div>Total de Produtos</div>
-    <h2>{{ total_produtos }}</h2>
-  </div>
-  <div class="card">
-    <div>Estoque Total</div>
-    <h2>{{ estoque_total }}</h2>
-  </div>
-  <div class="card">
-    <div>Receita Total</div>
-    <h2>R$ {{ '%.2f'|format(receita_total) }}</h2>
-  </div>
-  <div class="card">
-    <div>Lucro Total</div>
-    <h2>R$ {{ '%.2f'|format(lucro_total) }}</h2>
-  </div>
-  <div class="card">
-    <div>Margem média</div>
-    <h2>{{ '%.2f'|format(margem_media) }}%</h2>
-  </div>
-  <div class="card">
-    <div>Ticket médio</div>
-    <h2>R$ {{ '%.2f'|format(ticket_medio) }}</h2>
-  </div>
-  <div class="card">
-    <div>Comissão total</div>
-    <h2>R$ {{ '%.2f'|format(comissao_total) }}</h2>
-  </div>
-</div>
+{% if vazio %}
+<form action="/importar" method="post" enctype="multipart/form-data">
+    <input type="file" name="arquivo">
+    <button type="submit">Importar</button>
+</form>
+{% else %}
+<div class="card">Receita Total: R$ {{ "%.2f"|format(receita) }}</div>
+<div class="card">Comissão Total: R$ {{ "%.2f"|format(comissao) }}</div>
+<div class="card">Imposto Total: R$ {{ "%.2f"|format(imposto) }}</div>
+<div class="card">Despesas Totais: R$ {{ "%.2f"|format(despesas) }}</div>
+<div class="card" style="background:#d4ffd4;">Lucro Líquido: R$ {{ "%.2f"|format(lucro) }}</div>
 
-<div class="card-grid">
-  <div class="card">
-    <h3>Produto mais vendido</h3>
-    {% if produto_mais_vendido %}
-      <div>{{ produto_mais_vendido[0] }}</div>
-      <small>Qtd: {{ produto_mais_vendido[1] }}</small>
-    {% else %}
-      <small>Sem vendas ainda.</small>
-    {% endif %}
-  </div>
-  <div class="card">
-    <h3>Maior lucro</h3>
-    {% if produto_maior_lucro %}
-      <div>{{ produto_maior_lucro[0] }}</div>
-      <small>Lucro: R$ {{ '%.2f'|format(produto_maior_lucro[1]) }}</small>
-    {% else %}
-      <small>Sem vendas ainda.</small>
-    {% endif %}
-  </div>
-  <div class="card">
-    <h3>Pior margem</h3>
-    {% if produto_pior_margem %}
-      <div>{{ produto_pior_margem[0] }}</div>
-      <small>Margem: R$ {{ '%.2f'|format(produto_pior_margem[1]) }}</small>
-    {% else %}
-      <small>Sem vendas ainda.</small>
-    {% endif %}
-  </div>
-  <div class="card">
-    <h3>Configurações</h3>
-    {% if cfg %}
-      <div class="small">Imposto: {{ '%.2f'|format(cfg.imposto_percent) }}%</div>
-      <div class="small">Despesas: {{ '%.2f'|format(cfg.despesas_percent) }}%</div>
-    {% else %}
-      <div class="small">Sem configurações.</div>
-    {% endif %}
-  </div>
-</div>
-{% endblock %}
+<br><a href="/relatorio">Ver relatório completo</a>
+{% endif %}
+</body>
+</html>
