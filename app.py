@@ -176,15 +176,24 @@ def importar_vendas_ml(caminho_arquivo, engine: Engine):
             except Exception:
                 unidades = 0
 
-            total_brl = row.get("Total (BRL)")
-            try:
-                receita_total = float(total_brl) if total_brl == total_brl else 0.0
-            except Exception:
-                receita_total = 0.0
+            receita_total = 0.0
+            # Receita bruta: prioriza a coluna "Receita por produtos (BRL)".
+            if "Receita por produtos (BRL)" in df.columns:
+                receita_total = parse_brl(row.get("Receita por produtos (BRL)"))
+            elif "Total (BRL)" in df.columns:
+                # fallback para o comportamento antigo, se necessário
+                receita_total = parse_brl(row.get("Total (BRL)"))
+
+            # Comissão / tarifas: coluna K "Tarifa de venda e impostos (BRL)".
+            comissao = 0.0
+            if "Tarifa de venda e impostos (BRL)" in df.columns:
+                comissao = parse_brl(row.get("Tarifa de venda e impostos (BRL)"))
 
             preco_medio_venda = receita_total / unidades if unidades > 0 else 0.0
             custo_total = custo_unitario * unidades
-            margem_contribuicao = receita_total - custo_total
+            margem_bruta = receita_total - custo_total
+            # Margem líquida: margem bruta menos comissão (na planilha vem negativa).
+            margem_contribuicao = margem_bruta + comissao
             numero_venda_ml = str(row.get("N.º de venda"))
 
             conn.execute(
@@ -210,6 +219,131 @@ def importar_vendas_ml(caminho_arquivo, engine: Engine):
 
             vendas_importadas += 1
 
+
+    return {
+        "lote_id": lote_id,
+        "vendas_importadas": vendas_importadas,
+        "vendas_sem_sku": vendas_sem_sku,
+        "vendas_sem_produto": vendas_sem_produto,
+    }
+
+
+def parse_brl(valor):
+    """Converte valores no formato brasileiro (R$ 1.234,56) para float."""
+    if valor is None:
+        return 0.0
+    # Se já for número
+    if isinstance(valor, (int, float)):
+        try:
+            if pd.isna(valor):
+                return 0.0
+        except Exception:
+            pass
+        return float(valor)
+    s = str(valor).strip()
+    if not s:
+        return 0.0
+    s = s.replace("R$", "").replace("\u00a0", "").replace(" ", "")
+    # remove separador de milhar e troca vírgula por ponto
+    s = s.replace(".", "").replace(",", ".")
+    try:
+        return float(s)
+    except ValueError:
+        return 0.0
+
+
+def importar_vendas_template(caminho_arquivo, engine: Engine):
+    """Importa vendas a partir do template consolidado (SKU, Título, Quantidade, Receita, Comissao, PrecoMedio)."""
+    lote_id = datetime.now().isoformat(timespec="seconds")
+
+    # tenta ler a aba 'Template'; se não existir, usa a primeira
+    try:
+        df = pd.read_excel(caminho_arquivo, sheet_name="Template")
+    except Exception:
+        df = pd.read_excel(caminho_arquivo, sheet_name=0)
+
+    colunas_obrig = {"SKU", "Título", "Quantidade", "Receita", "Comissao", "PrecoMedio"}
+    if not colunas_obrig.issubset(set(df.columns)):
+        raise ValueError("Planilha não está no formato esperado: colunas 'SKU, Título, Quantidade, Receita, Comissao, PrecoMedio' são obrigatórias.")
+
+    vendas_importadas = 0
+    vendas_sem_sku = 0
+    vendas_sem_produto = 0
+
+    with engine.begin() as conn:
+        for _, row in df.iterrows():
+            sku = str(row.get("SKU") or "").strip()
+            titulo = str(row.get("Título") or "").strip()
+
+            qtd_raw = row.get("Quantidade")
+            try:
+                quantidade = int(qtd_raw) if qtd_raw == qtd_raw else 0
+            except Exception:
+                quantidade = 0
+
+            if quantidade <= 0:
+                continue
+
+            receita_total = parse_brl(row.get("Receita"))
+            comissao = parse_brl(row.get("Comissao"))
+
+            # Encontrar produto
+            produto_row = None
+            if sku:
+                produto_row = conn.execute(
+                    select(produtos.c.id, produtos.c.custo_unitario)
+                    .where(produtos.c.sku == sku)
+                ).mappings().first()
+            if not produto_row and titulo:
+                produto_row = conn.execute(
+                    select(produtos.c.id, produtos.c.custo_unitario)
+                    .where(produtos.c.nome == titulo)
+                ).mappings().first()
+
+            if not sku and not produto_row:
+                vendas_sem_sku += 1
+                continue
+
+            if not produto_row:
+                vendas_sem_produto += 1
+                continue
+
+            produto_id = produto_row["id"]
+            custo_unitario = float(produto_row["custo_unitario"] or 0.0)
+
+            custo_total = custo_unitario * quantidade
+
+            # margem antes da comissão
+            margem_bruta = receita_total - custo_total
+            # Opção B: reduzir margem pela comissão
+            margem_contribuicao = margem_bruta - comissao
+
+            # Opção 2: ignorar PrecoMedio da planilha, calcular pelo total / quantidade
+            preco_venda_unitario = receita_total / quantidade if quantidade > 0 else 0.0
+
+            conn.execute(
+                insert(vendas).values(
+                    produto_id=produto_id,
+                    data_venda=datetime.now().isoformat(),
+                    quantidade=quantidade,
+                    preco_venda_unitario=preco_venda_unitario,
+                    receita_total=receita_total,
+                    custo_total=custo_total,
+                    margem_contribuicao=margem_contribuicao,
+                    origem="Template",
+                    numero_venda_ml=None,
+                    lote_importacao=lote_id,
+                )
+            )
+
+            conn.execute(
+                update(produtos)
+                .where(produtos.c.id == produto_id)
+                .values(estoque_atual=produtos.c.estoque_atual - quantidade)
+            )
+
+            vendas_importadas += 1
+
     return {
         "lote_id": lote_id,
         "vendas_importadas": vendas_importadas,
@@ -219,6 +353,7 @@ def importar_vendas_ml(caminho_arquivo, engine: Engine):
 
 # --------------------------------------------------------------------
 # Rotas principais
+
 # --------------------------------------------------------------------
 @app.route("/")
 def dashboard():
@@ -538,6 +673,35 @@ def importar_ml_view():
         return redirect(url_for("importar_ml_view"))
 
     return render_template("importar_ml.html")
+
+
+@app.route("/importar_template", methods=["POST"])
+def importar_template_view():
+    """Importa vendas a partir do template consolidado preenchido manualmente."""
+    if "arquivo_template" not in request.files:
+        flash("Nenhum arquivo enviado para o template.", "danger")
+        return redirect(url_for("importar_ml_view"))
+    file = request.files["arquivo_template"]
+    if file.filename == "":
+        flash("Selecione um arquivo para o template.", "danger")
+        return redirect(url_for("importar_ml_view"))
+    filename = secure_filename(file.filename)
+    caminho = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    file.save(caminho)
+
+    try:
+        resumo = importar_vendas_template(caminho, engine)
+        flash(
+            f"Template importado. Lote {resumo['lote_id']} - "
+            f"{resumo['vendas_importadas']} vendas importadas, "
+            f"{resumo['vendas_sem_sku']} linhas sem SKU/Título, "
+            f"{resumo['vendas_sem_produto']} sem produto cadastrado.",
+            "success",
+        )
+    except Exception as e:
+        flash(f"Erro na importação pelo template: {e}", "danger")
+    return redirect(url_for("importar_ml_view"))
+
 
 @app.route("/exportar_consolidado")
 def exportar_consolidado():

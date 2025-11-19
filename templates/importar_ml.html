@@ -15,6 +15,18 @@
 
 <hr>
 
+<h2>Importar consolidação (Template)</h2>
+<p>Use a planilha de modelo preenchida manualmente (SKU, Título, Quantidade, Receita, Comissao, PrecoMedio).</p>
+<form method="post" action="{{ url_for('importar_template') }}" enctype="multipart/form-data">
+  <div class="form-group">
+    <label for="arquivo_template">Arquivo do template (.xlsx)</label>
+    <input type="file" id="arquivo_template" name="arquivo_template" accept=".xlsx,.xls" required>
+  </div>
+  <button class="btn btn-primary" type="submit">Importar template</button>
+</form>
+
+<hr>
+
 <h2>Exportar consolidação</h2>
 <p>Baixar modelo vazio para preencher manualmente:</p>
 <a class="btn btn-primary" href="{{ url_for('exportar_template') }}">Baixar modelo</a>
