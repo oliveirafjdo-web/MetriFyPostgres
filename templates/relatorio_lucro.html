@@ -3,8 +3,11 @@
 <h1>Relatório de lucro por produto</h1>
 
 <p class="small">
-  Margem já considera a comissão. Neste relatório também são descontados:
-  imposto ({{ '%.2f'|format(imposto_percent) }}%) e despesas ({{ '%.2f'|format(despesas_percent) }}%).
+  Margem já considera a comissão do marketplace. Neste relatório também são descontados:
+  <strong>imposto</strong> ({{ '%.2f'|format(imposto_percent) }}%) calculado sobre a
+  <strong>receita bruta</strong>
+  e <strong>despesas</strong> ({{ '%.2f'|format(despesas_percent) }}%) calculadas sobre a
+  <strong>receita líquida</strong>.
 </p>
 
 <table>
@@ -12,31 +15,35 @@
     <tr>
       <th>Produto</th>
       <th>Qtd. vendida</th>
-      <th>Receita (R$)</th>
+      <th>Receita bruta (R$)</th>
       <th>Custo (R$)</th>
-      <th>Margem (R$)</th>
+      <th>Comissão (R$)</th>
+      <th>Receita líquida (R$)</th>
+      <th>Margem pós-comissão (R$)</th>
       <th>Impostos (R$)</th>
       <th>Despesas (R$)</th>
       <th>Lucro líquido (R$)</th>
-      <th>Margem (%)</th>
+      <th>Margem líquida (%)</th>
     </tr>
   </thead>
   <tbody>
     {% for l in linhas %}
     {% set receita = l['receita'] or 0 %}
-    {% set margem = l['margem'] or 0 %}
+    {% set lucro_liquido = l['lucro_liquido'] or 0 %}
     <tr>
       <td>{{ l['nome'] }}</td>
       <td>{{ l['qtd'] }}</td>
       <td>{{ '%.2f'|format(receita) }}</td>
       <td>{{ '%.2f'|format(l['custo'] or 0) }}</td>
-      <td>{{ '%.2f'|format(margem) }}</td>
+      <td>{{ '%.2f'|format(l['comissao'] or 0) }}</td>
+      <td>{{ '%.2f'|format(l['receita_liquida'] or 0) }}</td>
+      <td>{{ '%.2f'|format(l['margem'] or 0) }}</td>
       <td>{{ '%.2f'|format(l['impostos'] or 0) }}</td>
       <td>{{ '%.2f'|format(l['despesas'] or 0) }}</td>
-      <td>{{ '%.2f'|format(l['lucro_liquido'] or 0) }}</td>
+      <td>{{ '%.2f'|format(lucro_liquido) }}</td>
       <td>
         {% if receita > 0 %}
-          {{ '%.2f'|format((l['lucro_liquido'] / receita) * 100) }}%
+          {{ '%.2f'|format((lucro_liquido / receita) * 100) }}%
         {% else %}
           -
         {% endif %}
@@ -50,6 +57,11 @@
       <th>{{ totais['qtd'] }}</th>
       <th>{{ '%.2f'|format(totais['receita'] or 0) }}</th>
       <th>{{ '%.2f'|format(totais['custo'] or 0) }}</th>
+      <th>{{ '%.2f'|format(totais['comissao'] or 0) }}</th>
+      <th>
+        {% set receita_liq_total = (totais['receita'] or 0) - (totais['comissao'] or 0) %}
+        {{ '%.2f'|format(receita_liq_total) }}
+      </th>
       <th>{{ '%.2f'|format(totais['margem'] or 0) }}</th>
       <th>{{ '%.2f'|format(totais['impostos'] or 0) }}</th>
       <th>{{ '%.2f'|format(totais['despesas'] or 0) }}</th>
