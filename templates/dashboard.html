@@ -1,84 +1,74 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Dashboard</h1>
 
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Dashboard - MetriFy 5.1</title>
-    <style>
-        body { font-family: Arial, sans-serif; padding: 20px; background: #fafafa; }
-        h2 { margin-bottom: 20px; }
-        .card-container { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 30px; }
-        .card {
-            padding: 15px 20px;
-            background: #ffffff;
-            border-radius: 10px;
-            box-shadow: 0 0 5px rgba(0,0,0,0.05);
-            min-width: 220px;
-        }
-        .card strong { display: block; font-size: 13px; color: #555; margin-bottom: 6px; }
-        .card span { font-size: 18px; font-weight: bold; }
-        .card.lucro { background: #e4ffea; }
-        .acoes { margin-top: 20px; }
-        .btn {
-            display: inline-block;
-            padding: 8px 14px;
-            background: #007bff;
-            color: #fff;
-            border-radius: 6px;
-            text-decoration: none;
-            font-size: 14px;
-        }
-        .btn:hover { background: #0056b3; }
-        .upload-box {
-            padding: 20px;
-            background: #fff;
-            border-radius: 10px;
-            box-shadow: 0 0 5px rgba(0,0,0,0.05);
-            max-width: 400px;
-        }
-    </style>
-</head>
-<body>
+<div class="card-grid">
+  <div class="card">
+    <div>Total de Produtos</div>
+    <h2>{{ total_produtos }}</h2>
+  </div>
+  <div class="card">
+    <div>Estoque Total</div>
+    <h2>{{ estoque_total }}</h2>
+  </div>
+  <div class="card">
+    <div>Receita Total</div>
+    <h2>R$ {{ '%.2f'|format(receita_total) }}</h2>
+  </div>
+  <div class="card">
+    <div>Lucro Total</div>
+    <h2>R$ {{ '%.2f'|format(lucro_total) }}</h2>
+  </div>
+  <div class="card">
+    <div>Margem média</div>
+    <h2>{{ '%.2f'|format(margem_media) }}%</h2>
+  </div>
+  <div class="card">
+    <div>Ticket médio</div>
+    <h2>R$ {{ '%.2f'|format(ticket_medio) }}</h2>
+  </div>
+  <div class="card">
+    <div>Comissão total</div>
+    <h2>R$ {{ '%.2f'|format(comissao_total) }}</h2>
+  </div>
+</div>
 
-<h2>MetriFy 5.1 - Dashboard</h2>
-
-{% if vazio %}
-    <div class="upload-box">
-        <p><strong>Importar planilha de vendas do Mercado Livre</strong></p>
-        <form action="{{ url_for('importar') }}" method="post" enctype="multipart/form-data">
-            <input type="file" name="arquivo" accept=".xlsx,.xls" required>
-            <br><br>
-            <button type="submit" class="btn">Importar</button>
-        </form>
-    </div>
-{% else %}
-    <div class="card-container">
-        <div class="card">
-            <strong>Receita total (coluna Q)</strong>
-            <span>R$ {{ "%.2f"|format(receita) }}</span>
-        </div>
-        <div class="card">
-            <strong>Comissão total (soma da coluna K)</strong>
-            <span>R$ {{ "%.2f"|format(comissao) }}</span>
-        </div>
-        <div class="card">
-            <strong>Imposto total (5% sobre H)</strong>
-            <span>R$ {{ "%.2f"|format(imposto) }}</span>
-        </div>
-        <div class="card">
-            <strong>Despesas totais (3,5% sobre Q)</strong>
-            <span>R$ {{ "%.2f"|format(despesas) }}</span>
-        </div>
-        <div class="card lucro">
-            <strong>Lucro líquido</strong>
-            <span>R$ {{ "%.2f"|format(lucro) }}</span>
-        </div>
-    </div>
-
-    <div class="acoes">
-        <a href="{{ url_for('relatorio') }}" class="btn">Abrir relatório de lucro</a>
-    </div>
-{% endif %}
-
-</body>
-</html>
+<div class="card-grid">
+  <div class="card">
+    <h3>Produto mais vendido</h3>
+    {% if produto_mais_vendido %}
+      <div>{{ produto_mais_vendido[0] }}</div>
+      <small>Qtd: {{ produto_mais_vendido[1] }}</small>
+    {% else %}
+      <small>Sem vendas ainda.</small>
+    {% endif %}
+  </div>
+  <div class="card">
+    <h3>Maior lucro</h3>
+    {% if produto_maior_lucro %}
+      <div>{{ produto_maior_lucro[0] }}</div>
+      <small>Lucro: R$ {{ '%.2f'|format(produto_maior_lucro[1]) }}</small>
+    {% else %}
+      <small>Sem vendas ainda.</small>
+    {% endif %}
+  </div>
+  <div class="card">
+    <h3>Pior margem</h3>
+    {% if produto_pior_margem %}
+      <div>{{ produto_pior_margem[0] }}</div>
+      <small>Margem: R$ {{ '%.2f'|format(produto_pior_margem[1]) }}</small>
+    {% else %}
+      <small>Sem vendas ainda.</small>
+    {% endif %}
+  </div>
+  <div class="card">
+    <h3>Configurações</h3>
+    {% if cfg %}
+      <div class="small">Imposto: {{ '%.2f'|format(cfg.imposto_percent) }}%</div>
+      <div class="small">Despesas: {{ '%.2f'|format(cfg.despesas_percent) }}%</div>
+    {% else %}
+      <div class="small">Sem configurações.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
