@@ -667,7 +667,7 @@ def importar_ml_view():
 
 
 @app.route("/importar_template", methods=["POST"])
-def importar_template_view():
+def importar_template():
     """Importa vendas a partir do template consolidado preenchido manualmente."""
     if "arquivo_template" not in request.files:
         flash("Nenhum arquivo enviado para o template.", "danger")
