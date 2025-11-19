@@ -176,19 +176,15 @@ def importar_vendas_ml(caminho_arquivo, engine: Engine):
             except Exception:
                 unidades = 0
 
-            # Receita BRUTA do produto (coluna H)
-            receita_total = parse_brl(row.get("Receita por produtos (BRL)"))
-            # Comissão / tarifas (coluna K - geralmente negativa)
-            comissao_val = parse_brl(row.get("Tarifa de venda e impostos (BRL)"))
+            total_brl = row.get("Total (BRL)")
+            try:
+                receita_total = float(total_brl) if total_brl == total_brl else 0.0
+            except Exception:
+                receita_total = 0.0
 
             preco_medio_venda = receita_total / unidades if unidades > 0 else 0.0
             custo_total = custo_unitario * unidades
-
-            # margem antes da comissão
-            margem_bruta = receita_total - custo_total
-            # comissao_val vem negativa, então somar = subtrair o valor absoluto
-            margem_contribuicao = margem_bruta + comissao_val
-
+            margem_contribuicao = receita_total - custo_total
             numero_venda_ml = str(row.get("N.º de venda"))
 
             conn.execute(
@@ -214,12 +210,12 @@ def importar_vendas_ml(caminho_arquivo, engine: Engine):
 
             vendas_importadas += 1
 
+
     return {
         "lote_id": lote_id,
         "vendas_importadas": vendas_importadas,
         "vendas_sem_sku": vendas_sem_sku,
         "vendas_sem_produto": vendas_sem_produto,
-    }
     }
 
 
@@ -369,24 +365,22 @@ def dashboard():
             select(func.coalesce(func.sum(vendas.c.margem_contribuicao), 0))
         ).scalar_one()
 
-        margem_media = 0.0
-        if receita_total > 0:
-            margem_media = (lucro_total / receita_total) * 100.0
+        margem_media = conn.execute(
+            select(
+                func.coalesce(
+                    func.avg(
+                        func.nullif(
+                            (vendas.c.margem_contribuicao / vendas.c.receita_total) * 100,
+                            0
+                        )
+                    ),
+                    0
+                )
+            )
+        ).scalar_one()
 
         ticket_medio = conn.execute(
             select(func.coalesce(func.avg(vendas.c.preco_venda_unitario), 0))
-        ).scalar_one()
-
-        # comissão total = (receita - custo) - margem (margem já pós-comissão)
-        comissao_total = conn.execute(
-            select(
-                func.coalesce(
-                    func.sum(
-                        vendas.c.receita_total - vendas.c.custo_total - vendas.c.margem_contribuicao
-                    ),
-                    0,
-                )
-            )
         ).scalar_one()
 
         produto_mais_vendido = conn.execute(
@@ -413,9 +407,7 @@ def dashboard():
             .limit(1)
         ).first()
 
-        cfg = conn.execute(
-            select(configuracoes).where(configuracoes.c.id == 1)
-        ).mappings().first()
+        cfg = conn.execute(select(configuracoes).where(configuracoes.c.id == 1)).mappings().first()
 
     return render_template(
         "dashboard.html",
@@ -425,7 +417,7 @@ def dashboard():
         lucro_total=lucro_total,
         margem_media=margem_media,
         ticket_medio=ticket_medio,
-        comissao_total=comissao_total,
+        comissao_total=0,
         produto_mais_vendido=produto_mais_vendido,
         produto_maior_lucro=produto_maior_lucro,
         produto_pior_margem=produto_pior_margem,
@@ -858,26 +850,16 @@ def relatorio_lucro():
 
     linhas = []
     total_qtd = total_receita = total_custo = total_margem = 0.0
-    total_comissao = total_impostos = total_despesas = total_lucro_liquido = 0.0
+    total_impostos = total_despesas = total_lucro_liquido = 0.0
 
     for row in linhas_db:
         receita = float(row["receita"] or 0)
         custo = float(row["custo"] or 0)
-        margem = float(row["margem"] or 0)  # já pós-comissão
+        margem = float(row["margem"] or 0)
         qtd = int(row["qtd"] or 0)
 
-        # comissão (valor positivo)
-        comissao = (receita - custo) - margem
-        if comissao < 0:
-            comissao = 0.0  # só por segurança
-
-        receita_liquida = receita - comissao
-
-        # imposto sobre receita BRUTA
         impostos = receita * imposto_percent / 100.0
-        # despesas sobre receita LÍQUIDA
-        despesas = receita_liquida * despesas_percent / 100.0
-
+        despesas = receita * despesas_percent / 100.0
         lucro_liquido = margem - impostos - despesas
 
         linhas.append({
@@ -886,8 +868,6 @@ def relatorio_lucro():
             "receita": receita,
             "custo": custo,
             "margem": margem,
-            "comissao": comissao,
-            "receita_liquida": receita_liquida,
             "impostos": impostos,
             "despesas": despesas,
             "lucro_liquido": lucro_liquido,
@@ -897,7 +877,6 @@ def relatorio_lucro():
         total_receita += receita
         total_custo += custo
         total_margem += margem
-        total_comissao += comissao
         total_impostos += impostos
         total_despesas += despesas
         total_lucro_liquido += lucro_liquido
@@ -907,19 +886,13 @@ def relatorio_lucro():
         "receita": total_receita,
         "custo": total_custo,
         "margem": total_margem,
-        "comissao": total_comissao,
         "impostos": total_impostos,
         "despesas": total_despesas,
         "lucro_liquido": total_lucro_liquido,
     }
 
-    return render_template(
-        "relatorio_lucro.html",
-        linhas=linhas,
-        totais=totais,
-        imposto_percent=imposto_percent,
-        despesas_percent=despesas_percent,
-    )
+    return render_template("relatorio_lucro.html", linhas=linhas, totais=totais,
+                           imposto_percent=imposto_percent, despesas_percent=despesas_percent)
 
 
 if __name__ == "__main__":
