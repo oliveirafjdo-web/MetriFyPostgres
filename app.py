@@ -858,16 +858,26 @@ def relatorio_lucro():
 
     linhas = []
     total_qtd = total_receita = total_custo = total_margem = 0.0
-    total_impostos = total_despesas = total_lucro_liquido = 0.0
+    total_comissao = total_impostos = total_despesas = total_lucro_liquido = 0.0
 
     for row in linhas_db:
         receita = float(row["receita"] or 0)
         custo = float(row["custo"] or 0)
-        margem = float(row["margem"] or 0)
+        margem = float(row["margem"] or 0)  # já pós-comissão
         qtd = int(row["qtd"] or 0)
 
+        # comissão (valor positivo)
+        comissao = (receita - custo) - margem
+        if comissao < 0:
+            comissao = 0.0  # só por segurança
+
+        receita_liquida = receita - comissao
+
+        # imposto sobre receita BRUTA
         impostos = receita * imposto_percent / 100.0
-        despesas = receita * despesas_percent / 100.0
+        # despesas sobre receita LÍQUIDA
+        despesas = receita_liquida * despesas_percent / 100.0
+
         lucro_liquido = margem - impostos - despesas
 
         linhas.append({
@@ -876,6 +886,8 @@ def relatorio_lucro():
             "receita": receita,
             "custo": custo,
             "margem": margem,
+            "comissao": comissao,
+            "receita_liquida": receita_liquida,
             "impostos": impostos,
             "despesas": despesas,
             "lucro_liquido": lucro_liquido,
@@ -885,6 +897,7 @@ def relatorio_lucro():
         total_receita += receita
         total_custo += custo
         total_margem += margem
+        total_comissao += comissao
         total_impostos += impostos
         total_despesas += despesas
         total_lucro_liquido += lucro_liquido
@@ -894,13 +907,19 @@ def relatorio_lucro():
         "receita": total_receita,
         "custo": total_custo,
         "margem": total_margem,
+        "comissao": total_comissao,
         "impostos": total_impostos,
         "despesas": total_despesas,
         "lucro_liquido": total_lucro_liquido,
     }
 
-    return render_template("relatorio_lucro.html", linhas=linhas, totais=totais,
-                           imposto_percent=imposto_percent, despesas_percent=despesas_percent)
+    return render_template(
+        "relatorio_lucro.html",
+        linhas=linhas,
+        totais=totais,
+        imposto_percent=imposto_percent,
+        despesas_percent=despesas_percent,
+    )
 
 
 if __name__ == "__main__":
