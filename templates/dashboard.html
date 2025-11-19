@@ -1,29 +1,84 @@
+
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Dashboard</title>
+    <title>Dashboard - MetriFy 5.1</title>
     <style>
-    body { font-family: Arial; padding:20px;}
-    .card { padding:20px; margin:10px; background:#f2f2f2; border-radius:10px; display:inline-block;}
+        body { font-family: Arial, sans-serif; padding: 20px; background: #fafafa; }
+        h2 { margin-bottom: 20px; }
+        .card-container { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 30px; }
+        .card {
+            padding: 15px 20px;
+            background: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.05);
+            min-width: 220px;
+        }
+        .card strong { display: block; font-size: 13px; color: #555; margin-bottom: 6px; }
+        .card span { font-size: 18px; font-weight: bold; }
+        .card.lucro { background: #e4ffea; }
+        .acoes { margin-top: 20px; }
+        .btn {
+            display: inline-block;
+            padding: 8px 14px;
+            background: #007bff;
+            color: #fff;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .btn:hover { background: #0056b3; }
+        .upload-box {
+            padding: 20px;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.05);
+            max-width: 400px;
+        }
     </style>
 </head>
 <body>
-<h2>Dashboard - MetriFy 5.1</h2>
+
+<h2>MetriFy 5.1 - Dashboard</h2>
 
 {% if vazio %}
-<form action="/importar" method="post" enctype="multipart/form-data">
-    <input type="file" name="arquivo">
-    <button type="submit">Importar</button>
-</form>
+    <div class="upload-box">
+        <p><strong>Importar planilha de vendas do Mercado Livre</strong></p>
+        <form action="{{ url_for('importar') }}" method="post" enctype="multipart/form-data">
+            <input type="file" name="arquivo" accept=".xlsx,.xls" required>
+            <br><br>
+            <button type="submit" class="btn">Importar</button>
+        </form>
+    </div>
 {% else %}
-<div class="card">Receita Total: R$ {{ "%.2f"|format(receita) }}</div>
-<div class="card">Comissão Total: R$ {{ "%.2f"|format(comissao) }}</div>
-<div class="card">Imposto Total: R$ {{ "%.2f"|format(imposto) }}</div>
-<div class="card">Despesas Totais: R$ {{ "%.2f"|format(despesas) }}</div>
-<div class="card" style="background:#d4ffd4;">Lucro Líquido: R$ {{ "%.2f"|format(lucro) }}</div>
+    <div class="card-container">
+        <div class="card">
+            <strong>Receita total (coluna Q)</strong>
+            <span>R$ {{ "%.2f"|format(receita) }}</span>
+        </div>
+        <div class="card">
+            <strong>Comissão total (soma da coluna K)</strong>
+            <span>R$ {{ "%.2f"|format(comissao) }}</span>
+        </div>
+        <div class="card">
+            <strong>Imposto total (5% sobre H)</strong>
+            <span>R$ {{ "%.2f"|format(imposto) }}</span>
+        </div>
+        <div class="card">
+            <strong>Despesas totais (3,5% sobre Q)</strong>
+            <span>R$ {{ "%.2f"|format(despesas) }}</span>
+        </div>
+        <div class="card lucro">
+            <strong>Lucro líquido</strong>
+            <span>R$ {{ "%.2f"|format(lucro) }}</span>
+        </div>
+    </div>
 
-<br><a href="/relatorio">Ver relatório completo</a>
+    <div class="acoes">
+        <a href="{{ url_for('relatorio') }}" class="btn">Abrir relatório de lucro</a>
+    </div>
 {% endif %}
+
 </body>
 </html>

@@ -1,33 +1,45 @@
+
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Relatório</title>
-    <script src="/static/js/sort.js"></script>
+    <title>Relatório de Lucro</title>
+    <script src="{{ url_for('static', filename='js/sort.js') }}"></script>
     <style>
-        table { border-collapse: collapse; width:100%; }
-        th, td { border:1px solid #ccc; padding:8px; }
-        th { cursor:pointer; background:#eee; }
+        body { font-family: Arial, sans-serif; padding: 20px; background: #fafafa; }
+        h2 { margin-bottom: 15px; }
+        table { border-collapse: collapse; width: 100%; background: #fff; }
+        th, td { border: 1px solid #ddd; padding: 6px 8px; font-size: 13px; }
+        th {
+            cursor: pointer;
+            background: #f0f0f0;
+            position: sticky;
+            top: 0;
+        }
+        th:hover { background: #e0e0e0; }
+        .back-link { margin-bottom: 15px; display: inline-block; }
     </style>
 </head>
 <body>
-<h2>Relatório de Lucro</h2>
+
+<a href="{{ url_for('dashboard') }}" class="back-link">← Voltar para o dashboard</a>
+<h2>Relatório de Lucro por Venda</h2>
 
 <table id="tabela">
     <thead>
         <tr>
             {% for k in tabela[0].keys() %}
-            <th onclick="sortTable('{{ loop.index0 }}')">{{ k }}</th>
+                <th onclick="sortTable({{ loop.index0 }})">{{ k }}</th>
             {% endfor %}
         </tr>
     </thead>
     <tbody>
         {% for linha in tabela %}
-        <tr>
-            {% for v in linha.values() %}
-            <td>{{ v }}</td>
-            {% endfor %}
-        </tr>
+            <tr>
+                {% for v in linha.values() %}
+                    <td>{{ v }}</td>
+                {% endfor %}
+            </tr>
         {% endfor %}
     </tbody>
 </table>
