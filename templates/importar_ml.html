@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Importar vendas do Mercado Livre</h1>
+
+<p>Envie o relatório oficial de <strong>Vendas BR</strong> do Mercado Livre (.xlsx), sem editar.</p>
+
+<form method="post" enctype="multipart/form-data">
+  <div class="form-group">
+    <label for="arquivo">Arquivo (.xlsx)</label>
+    <input type="file" id="arquivo" name="arquivo" accept=".xlsx,.xls" required>
+  </div>
+  <button class="btn btn-primary" type="submit">Importar</button>
+</form>
+{% endblock %}

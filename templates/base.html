@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>MetriFy ERP</title>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; background:#f3f4f6; }
+    .layout { display:flex; height:100vh; }
+    .sidebar { width:220px; background:#0d6efd; color:#fff; padding:20px 10px; box-sizing:border-box; }
+    .sidebar h2 { text-align:center; margin-top:0; margin-bottom:20px; }
+    .sidebar a { color:#fff; text-decoration:none; display:block; padding:8px 12px; border-radius:4px; margin-bottom:4px; }
+    .sidebar a:hover { background:rgba(255,255,255,0.15); }
+    .content { flex:1; padding:20px; overflow-y:auto; box-sizing:border-box; }
+    .card-grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap:16px; margin-bottom:24px; }
+    .card { background:#fff; padding:16px; border-radius:8px; box-shadow:0 1px 2px rgba(0,0,0,0.1); }
+    table { width:100%; border-collapse:collapse; background:#fff; }
+    th, td { padding:8px 10px; border-bottom:1px solid #e5e7eb; text-align:left; }
+    th { background:#f9fafb; }
+    .btn { padding:6px 12px; border-radius:4px; border:none; cursor:pointer; font-size:14px; }
+    .btn-primary { background:#0d6efd; color:#fff; }
+    .btn-danger { background:#dc3545; color:#fff; }
+    .btn-link { background:none; border:none; padding:0; color:#0d6efd; cursor:pointer; }
+    .alert { padding:10px 12px; border-radius:4px; margin-bottom:12px; }
+    .alert-success { background:#d1fae5; color:#065f46; }
+    .alert-danger { background:#fee2e2; color:#b91c1c; }
+    form.inline { display:inline; }
+    input, select { padding:6px 8px; border-radius:4px; border:1px solid #d1d5db; width:100%; box-sizing:border-box; }
+    label { display:block; margin-bottom:4px; font-size:14px; }
+    .form-group { margin-bottom:10px; }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <h2>MetriFy</h2>
+    <a href="{{ url_for('dashboard') }}">Dashboard</a>
+    <a href="{{ url_for('lista_produtos') }}">Produtos</a>
+    <a href="{{ url_for('estoque_view') }}">Estoque</a>
+    <a href="{{ url_for('importar_ml_view') }}">Importar Vendas</a>
+    <a href="{{ url_for('lista_vendas') }}">Vendas</a>
+    <a href="{{ url_for('relatorio_lucro') }}">Relatório de Lucro</a>
+    <a href="{{ url_for('configuracoes_view') }}">Configurações</a>
+  </div>
+  <div class="content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </div>
+</div>
+</body>
+</html>

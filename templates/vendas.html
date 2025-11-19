@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Vendas</h1>
+
+<h2>Lotes de importação</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Lote</th>
+      <th>Qtd. vendas</th>
+      <th>Receita (R$)</th>
+      <th>Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for lote in lotes %}
+    <tr>
+      <td>{{ lote['lote_importacao'] }}</td>
+      <td>{{ lote['qtd_vendas'] }}</td>
+      <td>{{ '%.2f'|format(lote['receita_lote']) }}</td>
+      <td>
+        <form class="inline" method="post" action="{{ url_for('excluir_lote_vendas', lote_id=lote['lote_importacao']) }}" onsubmit="return confirm('Excluir TODAS as vendas deste lote?');">
+          <button class="btn btn-danger" type="submit">Excluir lote</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>Todas as vendas</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Data</th>
+      <th>Produto</th>
+      <th>Qtd</th>
+      <th>Preço unit. (R$)</th>
+      <th>Receita (R$)</th>
+      <th>Margem (R$)</th>
+      <th>Origem</th>
+      <th>Venda ML</th>
+      <th>Lote</th>
+      <th>Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for v in vendas %}
+    <tr>
+      <td>{{ v['data_venda'] }}</td>
+      <td>{{ v['nome'] }}</td>
+      <td>{{ v['quantidade'] }}</td>
+      <td>{{ '%.2f'|format(v['preco_venda_unitario']) }}</td>
+      <td>{{ '%.2f'|format(v['receita_total']) }}</td>
+      <td>{{ '%.2f'|format(v['margem_contribuicao']) }}</td>
+      <td>{{ v['origem'] }}</td>
+      <td>{{ v['numero_venda_ml'] }}</td>
+      <td>{{ v['lote_importacao'] }}</td>
+      <td>
+        <a href="{{ url_for('editar_venda', venda_id=v['id']) }}">Editar</a>
+        |
+        <form class="inline" method="post" action="{{ url_for('excluir_venda', venda_id=v['id']) }}" onsubmit="return confirm('Excluir venda?');">
+          <button class="btn-link" type="submit">Excluir</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

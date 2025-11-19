@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Produtos</h1>
+
+<p><a class="btn btn-primary" href="{{ url_for('novo_produto') }}">+ Novo produto</a></p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Nome</th>
+      <th>SKU</th>
+      <th>Custo (R$)</th>
+      <th>Preço sugerido (R$)</th>
+      <th>Estoque atual</th>
+      <th>Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in produtos %}
+    <tr>
+      <td>{{ p['nome'] }}</td>
+      <td>{{ p['sku'] }}</td>
+      <td>{{ '%.2f'|format(p['custo_unitario']) }}</td>
+      <td>{{ '%.2f'|format(p['preco_venda_sugerido']) }}</td>
+      <td>{{ p['estoque_atual'] }}</td>
+      <td>
+        <a href="{{ url_for('editar_produto', produto_id=p['id']) }}">Editar</a>
+        |
+        <form class="inline" method="post" action="{{ url_for('excluir_produto', produto_id=p['id']) }}" onsubmit="return confirm('Excluir produto?');">
+          <button class="btn-link" type="submit">Excluir</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

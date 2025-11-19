@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Relatório de lucro por produto</h1>
+
+<table>
+  <thead>
+    <tr>
+      <th>Produto</th>
+      <th>Qtd. vendida</th>
+      <th>Receita (R$)</th>
+      <th>Custo (R$)</th>
+      <th>Margem (R$)</th>
+      <th>Margem (%)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for l in linhas %}
+    {% set receita = l['receita'] or 0 %}
+    {% set margem = l['margem'] or 0 %}
+    <tr>
+      <td>{{ l['nome'] }}</td>
+      <td>{{ l['qtd'] }}</td>
+      <td>{{ '%.2f'|format(receita) }}</td>
+      <td>{{ '%.2f'|format(l['custo'] or 0) }}</td>
+      <td>{{ '%.2f'|format(margem) }}</td>
+      <td>
+        {% if receita > 0 %}
+          {{ '%.2f'|format((margem / receita) * 100) }}%
+        {% else %}
+          -
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

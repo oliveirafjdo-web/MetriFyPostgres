@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Dashboard</h1>
+
+<div class="card-grid">
+  <div class="card">
+    <div>Total de Produtos</div>
+    <h2>{{ total_produtos }}</h2>
+  </div>
+  <div class="card">
+    <div>Estoque Total</div>
+    <h2>{{ estoque_total }}</h2>
+  </div>
+  <div class="card">
+    <div>Receita Total</div>
+    <h2>R$ {{ '%.2f'|format(receita_total) }}</h2>
+  </div>
+  <div class="card">
+    <div>Lucro Total</div>
+    <h2>R$ {{ '%.2f'|format(lucro_total) }}</h2>
+  </div>
+  <div class="card">
+    <div>Margem média</div>
+    <h2>{{ '%.2f'|format(margem_media) }}%</h2>
+  </div>
+  <div class="card">
+    <div>Ticket médio</div>
+    <h2>R$ {{ '%.2f'|format(ticket_medio) }}</h2>
+  </div>
+  <div class="card">
+    <div>Comissão total</div>
+    <h2>R$ {{ '%.2f'|format(comissao_total) }}</h2>
+  </div>
+</div>
+
+<div class="card-grid">
+  <div class="card">
+    <h3>Produto mais vendido</h3>
+    {% if produto_mais_vendido %}
+      <div>{{ produto_mais_vendido[0] }}</div>
+      <small>Qtd: {{ produto_mais_vendido[1] }}</small>
+    {% else %}
+      <small>Sem vendas ainda.</small>
+    {% endif %}
+  </div>
+  <div class="card">
+    <h3>Maior lucro</h3>
+    {% if produto_maior_lucro %}
+      <div>{{ produto_maior_lucro[0] }}</div>
+      <small>Lucro: R$ {{ '%.2f'|format(produto_maior_lucro[1]) }}</small>
+    {% else %}
+      <small>Sem vendas ainda.</small>
+    {% endif %}
+  </div>
+  <div class="card">
+    <h3>Pior margem</h3>
+    {% if produto_pior_margem %}
+      <div>{{ produto_pior_margem[0] }}</div>
+      <small>Margem: R$ {{ '%.2f'|format(produto_pior_margem[1]) }}</small>
+    {% else %}
+      <small>Sem vendas ainda.</small>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Editar venda #{{ venda['id'] }} - {{ venda['nome'] }}</h1>
+
+<form method="post">
+  <div class="form-group">
+    <label>Data da venda</label>
+    <input type="text" value="{{ venda['data_venda'] }}" disabled>
+  </div>
+  <div class="form-group">
+    <label>Quantidade</label>
+    <input type="number" name="quantidade" value="{{ venda['quantidade'] }}" required>
+  </div>
+  <div class="form-group">
+    <label>Preço de venda unitário (R$)</label>
+    <input type="number" step="0.01" name="preco_venda_unitario" value="{{ venda['preco_venda_unitario'] }}" required>
+  </div>
+  <div class="form-group">
+    <label>Custo total (R$)</label>
+    <input type="number" step="0.01" name="custo_total" value="{{ venda['custo_total'] }}" required>
+  </div>
+  <button class="btn btn-primary" type="submit">Salvar</button>
+  <a href="{{ url_for('lista_vendas') }}">Cancelar</a>
+</form>
+{% endblock %}

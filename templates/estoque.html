@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Estoque</h1>
+
+<table>
+  <thead>
+    <tr>
+      <th>Produto</th>
+      <th>SKU</th>
+      <th>Estoque atual</th>
+      <th>Custo unitário (R$)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in produtos %}
+    <tr>
+      <td>{{ p['nome'] }}</td>
+      <td>{{ p['sku'] }}</td>
+      <td>{{ p['estoque_atual'] }}</td>
+      <td>{{ '%.2f'|format(p['custo_unitario']) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
