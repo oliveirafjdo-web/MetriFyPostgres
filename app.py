@@ -369,22 +369,24 @@ def dashboard():
             select(func.coalesce(func.sum(vendas.c.margem_contribuicao), 0))
         ).scalar_one()
 
-        margem_media = conn.execute(
-            select(
-                func.coalesce(
-                    func.avg(
-                        func.nullif(
-                            (vendas.c.margem_contribuicao / vendas.c.receita_total) * 100,
-                            0
-                        )
-                    ),
-                    0
-                )
-            )
-        ).scalar_one()
+        margem_media = 0.0
+        if receita_total > 0:
+            margem_media = (lucro_total / receita_total) * 100.0
 
         ticket_medio = conn.execute(
             select(func.coalesce(func.avg(vendas.c.preco_venda_unitario), 0))
+        ).scalar_one()
+
+        # comissão total = (receita - custo) - margem (margem já pós-comissão)
+        comissao_total = conn.execute(
+            select(
+                func.coalesce(
+                    func.sum(
+                        vendas.c.receita_total - vendas.c.custo_total - vendas.c.margem_contribuicao
+                    ),
+                    0,
+                )
+            )
         ).scalar_one()
 
         produto_mais_vendido = conn.execute(
@@ -411,7 +413,9 @@ def dashboard():
             .limit(1)
         ).first()
 
-        cfg = conn.execute(select(configuracoes).where(configuracoes.c.id == 1)).mappings().first()
+        cfg = conn.execute(
+            select(configuracoes).where(configuracoes.c.id == 1)
+        ).mappings().first()
 
     return render_template(
         "dashboard.html",
@@ -421,7 +425,7 @@ def dashboard():
         lucro_total=lucro_total,
         margem_media=margem_media,
         ticket_medio=ticket_medio,
-        comissao_total=0,
+        comissao_total=comissao_total,
         produto_mais_vendido=produto_mais_vendido,
         produto_maior_lucro=produto_maior_lucro,
         produto_pior_margem=produto_pior_margem,
