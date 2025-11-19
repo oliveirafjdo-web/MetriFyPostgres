@@ -15,6 +15,6 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 
 RUN mkdir -p uploads
 
-EXPOSE 10000
+EXPOSE 5000
 
-CMD ["gunicorn", "-b", "0.0.0.0:10000", "app:app"]
+CMD ["python", "app.py"]
