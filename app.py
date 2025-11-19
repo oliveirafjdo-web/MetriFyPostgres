@@ -176,15 +176,19 @@ def importar_vendas_ml(caminho_arquivo, engine: Engine):
             except Exception:
                 unidades = 0
 
-            total_brl = row.get("Total (BRL)")
-            try:
-                receita_total = float(total_brl) if total_brl == total_brl else 0.0
-            except Exception:
-                receita_total = 0.0
+            # Receita BRUTA do produto (coluna H)
+            receita_total = parse_brl(row.get("Receita por produtos (BRL)"))
+            # Comissão / tarifas (coluna K - geralmente negativa)
+            comissao_val = parse_brl(row.get("Tarifa de venda e impostos (BRL)"))
 
             preco_medio_venda = receita_total / unidades if unidades > 0 else 0.0
             custo_total = custo_unitario * unidades
-            margem_contribuicao = receita_total - custo_total
+
+            # margem antes da comissão
+            margem_bruta = receita_total - custo_total
+            # comissao_val vem negativa, então somar = subtrair o valor absoluto
+            margem_contribuicao = margem_bruta + comissao_val
+
             numero_venda_ml = str(row.get("N.º de venda"))
 
             conn.execute(
@@ -210,12 +214,12 @@ def importar_vendas_ml(caminho_arquivo, engine: Engine):
 
             vendas_importadas += 1
 
-
     return {
         "lote_id": lote_id,
         "vendas_importadas": vendas_importadas,
         "vendas_sem_sku": vendas_sem_sku,
         "vendas_sem_produto": vendas_sem_produto,
+    }
     }
 
 
