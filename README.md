@@ -1,12 +1,20 @@
-# MetriFy 5.0 — versão Postgres
+# MetriFy 5.1 — Postgres + vendas manuais + ajustes de estoque
 
-ERP simples em Flask para controle de produtos, estoque, importação de vendas do Mercado Livre e relatório de lucro.
+- Dashboard com métricas
+- Cadastro de produtos
+- Estoque com ajustes (entrada/saída e custo)
+- Importar vendas do Mercado Livre (tenta por SKU e por título)
+- Exportar consolidação em .xlsx
+- Vendas com inclusão manual
+- Relatório de lucro por produto
+- Configurações (imposto e despesas em % sobre receita)
 
 ## Banco de dados
 
-- Em desenvolvimento: usa SQLite por padrão (`sqlite:///metrifiy.db`).
-- Em produção (Render / Railway / etc.): defina a variável `DATABASE_URL` apontando para o Postgres.
-  - Exemplo: `DATABASE_URL=postgresql://usuario:senha@host:5432/dbname`
+- Desenvolvimento: SQLite (`sqlite:///metrifiy.db`)
+- Produção: defina `DATABASE_URL` apontando para Postgres, exemplo:
+
+`DATABASE_URL=postgresql://usuario:senha@host:5432/dbname`
 
 ## Rodar local
 

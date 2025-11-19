@@ -61,5 +61,14 @@
       <small>Sem vendas ainda.</small>
     {% endif %}
   </div>
+  <div class="card">
+    <h3>Configurações</h3>
+    {% if cfg %}
+      <div class="small">Imposto: {{ '%.2f'|format(cfg.imposto_percent) }}%</div>
+      <div class="small">Despesas: {{ '%.2f'|format(cfg.despesas_percent) }}%</div>
+    {% else %}
+      <div class="small">Sem configurações.</div>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

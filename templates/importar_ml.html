@@ -3,6 +3,7 @@
 <h1>Importar vendas do Mercado Livre</h1>
 
 <p>Envie o relatório oficial de <strong>Vendas BR</strong> do Mercado Livre (.xlsx), sem editar.</p>
+<p class="small">O sistema tenta encontrar o produto pelo <strong>SKU</strong>. Se o SKU estiver vazio, tenta pelo <strong>Título do anúncio = nome do produto</strong>.</p>
 
 <form method="post" enctype="multipart/form-data">
   <div class="form-group">
@@ -11,4 +12,10 @@
   </div>
   <button class="btn btn-primary" type="submit">Importar</button>
 </form>
+
+<hr>
+
+<h2>Exportar consolidação</h2>
+<p>Gere uma planilha .xlsx com todas as vendas consolidadas.</p>
+<a class="btn btn-primary" href="{{ url_for('exportar_consolidado') }}">Exportar consolidação</a>
 {% endblock %}
