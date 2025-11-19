@@ -1,17 +1,16 @@
-{% extends "base.html" %}
-{% block content %}
-<h1>Configurações</h1>
+{% extends "layout.html" %}
+{% block conteudo %}
+<h2>Configurações</h2>
 
-<form method="post">
-  <div class="form-group">
-    <label>Imposto (% sobre a receita)</label>
-    <input type="number" step="0.01" name="imposto_percent" value="{{ cfg.imposto_percent if cfg else 0 }}">
+<form method="POST">
+  <div class="mb-3">
+    <label>Imposto (%)</label>
+    <input type="text" name="imposto_percent" class="form-control" value="{{ cfg.imposto_percent if cfg }}">
   </div>
-  <div class="form-group">
-    <label>Despesas (% sobre a receita)</label>
-    <input type="number" step="0.01" name="despesas_percent" value="{{ cfg.despesas_percent if cfg else 0 }}">
+  <div class="mb-3">
+    <label>Despesas (%)</label>
+    <input type="text" name="despesas_percent" class="form-control" value="{{ cfg.despesas_percent if cfg }}">
   </div>
-  <button class="btn btn-primary" type="submit">Salvar</button>
+  <button class="btn btn-success">Salvar</button>
 </form>
-<p class="small">Por enquanto esses campos são apenas informativos. No futuro podemos descontar imposto e despesas automaticamente na margem.</p>
 {% endblock %}

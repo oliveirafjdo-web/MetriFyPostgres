@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 {% block conteudo %}
-<h2>Ajustes de Estoque</h2>
+<h2>Nova venda manual</h2>
 
 <form method="POST">
   <div class="mb-3">
@@ -12,16 +12,17 @@
     </select>
   </div>
   <div class="mb-3">
-    <label>Tipo</label>
-    <select name="tipo" class="form-control">
-      <option value="entrada">Entrada</option>
-      <option value="saida">Saída</option>
-    </select>
+    <label>Data da venda</label>
+    <input type="date" name="data_venda" class="form-control">
   </div>
   <div class="mb-3">
     <label>Quantidade</label>
     <input type="number" name="quantidade" class="form-control">
   </div>
-  <button class="btn btn-primary">Registrar ajuste</button>
+  <div class="mb-3">
+    <label>Preço unitário</label>
+    <input type="text" name="preco_unitario" class="form-control">
+  </div>
+  <button class="btn btn-success">Salvar</button>
 </form>
 {% endblock %}

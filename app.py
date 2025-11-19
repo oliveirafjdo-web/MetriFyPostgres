@@ -1,135 +1,177 @@
 import os
-from datetime import datetime
-from io import BytesIO
+from datetime import datetime, date
 
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file
+import pandas as pd
+from flask import (
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+)
 from werkzeug.utils import secure_filename
 
 from sqlalchemy import (
-    create_engine, MetaData, Table, Column, Integer, String, Float,
-    ForeignKey, func, select, insert, update, delete
+    create_engine,
+    MetaData,
+    Table,
+    Column,
+    Integer,
+    String,
+    Float,
+    Date,
+    DateTime,
+    select,
+    insert,
+    update,
+    func,
 )
 from sqlalchemy.engine import Engine
-import pandas as pd
 
-# --------------------------------------------------------------------
-# Configuração de banco: Postgres em produção, SQLite em desenvolvimento
-# --------------------------------------------------------------------
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///metrifiy.db")
-UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", "uploads")
+# ----------------------------------------------------------------------
+# Configuração básica
+# ----------------------------------------------------------------------
+
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///metrifiy5_1.db")
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app = Flask(__name__)
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret")
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-app.secret_key = os.environ.get("SECRET_KEY", "metrifypremium-secret")
-
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 engine: Engine = create_engine(DATABASE_URL, future=True)
 metadata = MetaData()
 
-# --------------------------------------------------------------------
-# Definição das tabelas
-# --------------------------------------------------------------------
+# ----------------------------------------------------------------------
+# Tabelas
+# ----------------------------------------------------------------------
+
 produtos = Table(
     "produtos",
     metadata,
     Column("id", Integer, primary_key=True),
-    Column("nome", String(255), nullable=False),
-    Column("sku", String(100), unique=True),
-    Column("custo_unitario", Float, nullable=False, server_default="0"),
-    Column("preco_venda_sugerido", Float, nullable=False, server_default="0"),
-    Column("estoque_inicial", Integer, nullable=False, server_default="0"),
-    Column("estoque_atual", Integer, nullable=False, server_default="0"),
-    Column("curva", String(1)),
+    Column("nome", String, nullable=False),
+    Column("sku", String, nullable=True, unique=True),
+    Column("custo_unitario", Float, default=0.0),
+    Column("estoque_atual", Integer, default=0),
 )
 
 vendas = Table(
     "vendas",
     metadata,
     Column("id", Integer, primary_key=True),
-    Column("produto_id", Integer, ForeignKey("produtos.id"), nullable=False),
-    Column("data_venda", String(50)),
-    Column("quantidade", Integer, nullable=False),
-    Column("preco_venda_unitario", Float, nullable=False),
-    Column("receita_total", Float, nullable=False),
-    Column("custo_total", Float, nullable=False),
-    Column("margem_contribuicao", Float, nullable=False),
-    Column("origem", String(50)),
-    Column("numero_venda_ml", String(100)),
-    Column("lote_importacao", String(50)),
-)
-
-ajustes_estoque = Table(
-    "ajustes_estoque",
-    metadata,
-    Column("id", Integer, primary_key=True),
-    Column("produto_id", Integer, ForeignKey("produtos.id"), nullable=False),
-    Column("data_ajuste", String(50)),
-    Column("tipo", String(20)),  # entrada, saida
-    Column("quantidade", Integer),
-    Column("custo_unitario", Float),
-    Column("observacao", String(255)),
+    Column("produto_id", Integer, nullable=False),
+    Column("data_venda", Date, nullable=True),
+    Column("quantidade", Integer, default=0),
+    Column("preco_venda_unitario", Float, default=0.0),
+    Column("receita_total", Float, default=0.0),
+    Column("custo_total", Float, default=0.0),
+    Column("margem_contribuicao", Float, default=0.0),  # já pós comissão
+    Column("origem", String, default="Manual"),
+    Column("numero_venda_ml", String, nullable=True),
+    Column("lote_importacao", String, nullable=True),
+    Column("criado_em", DateTime, default=datetime.utcnow),
 )
 
 configuracoes = Table(
     "configuracoes",
     metadata,
     Column("id", Integer, primary_key=True),
-    Column("imposto_percent", Float, nullable=False, server_default="0"),
-    Column("despesas_percent", Float, nullable=False, server_default="0"),
+    Column("imposto_percent", Float, default=0.0),
+    Column("despesas_percent", Float, default=0.0),
 )
 
-def init_db():
-    """Cria as tabelas se não existirem e garante 1 linha em configuracoes."""
-    metadata.create_all(engine)
-    with engine.begin() as conn:
-        row = conn.execute(
-            select(configuracoes.c.id).limit(1)
-        ).first()
-        if not row:
-            conn.execute(
-                insert(configuracoes).values(id=1, imposto_percent=0.0, despesas_percent=0.0)
+metadata.create_all(engine)
+
+# garante um único registro em configuracoes
+with engine.begin() as conn:
+    qtd_cfg = conn.execute(
+        select(func.count()).select_from(configuracoes)
+    ).scalar_one()
+    if qtd_cfg == 0:
+        conn.execute(
+            insert(configuracoes).values(
+                id=1,
+                imposto_percent=0.0,
+                despesas_percent=0.0,
             )
+        )
 
-# --------------------------------------------------------------------
-# Utilidades para datas
-# --------------------------------------------------------------------
-MESES_PT = {
-    "janeiro": 1, "fevereiro": 2, "março": 3, "marco": 3,
-    "abril": 4, "maio": 5, "junho": 6, "julho": 7,
-    "agosto": 8, "setembro": 9, "outubro": 10,
-    "novembro": 11, "dezembro": 12,
-}
+# ----------------------------------------------------------------------
+# Funções auxiliares
+# ----------------------------------------------------------------------
 
-def parse_data_venda(texto):
-    if isinstance(texto, datetime):
-        return texto
-    if not isinstance(texto, str) or not texto.strip():
-        return None
+
+def parse_brl(valor):
+    """Converte 'R$ 1.234,56' ou '1234,56' em float."""
+    if valor is None:
+        return 0.0
+    if isinstance(valor, (int, float)):
+        try:
+            import math as _math
+            if hasattr(_math, "isnan") and _math.isnan(valor):
+                return 0.0
+        except Exception:
+            pass
+        return float(valor)
+    s = str(valor).strip()
+    if not s:
+        return 0.0
+    s = s.replace("R$", "").replace("\u00a0", "").replace(" ", "")
+    s = s.replace(".", "").replace(",", ".")
     try:
-        partes = texto.split()
-        dia = int(partes[0])
-        mes_nome = partes[2].lower()
-        ano = int(partes[4])
-        hora_min = partes[5]
-        hora, minuto = hora_min.split(":")
-        return datetime(ano, MESES_PT[mes_nome], int(dia), int(hora), int(minuto))
-    except Exception:
-        return None
+        return float(s)
+    except ValueError:
+        return 0.0
 
-# --------------------------------------------------------------------
-# Importação de vendas do Mercado Livre
-# --------------------------------------------------------------------
-def importar_vendas_ml(caminho_arquivo, engine: Engine):
+
+def parse_data_venda(valor):
+    if isinstance(valor, date):
+        return valor
+    if isinstance(valor, datetime):
+        return valor.date()
+    if valor is None:
+        return None
+    s = str(valor).strip()
+    if not s:
+        return None
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except Exception:
+            continue
+    return None
+
+
+# ----------------------------------------------------------------------
+# Importação Vendas BR Mercado Livre
+# ----------------------------------------------------------------------
+
+
+def importar_vendas_ml(caminho_arquivo: str, engine: Engine):
+    """
+    Lê a aba 'Vendas BR' do relatório oficial do Mercado Livre.
+
+    Usa:
+      - coluna H: 'Receita por produtos (BRL)'  -> receita bruta
+      - coluna K: 'Tarifa de venda e impostos (BRL)' -> comissão (normalmente negativa)
+    """
     lote_id = datetime.now().isoformat(timespec="seconds")
 
     df = pd.read_excel(
         caminho_arquivo,
         sheet_name="Vendas BR",
-        header=5
+        header=5,
     )
+
     if "N.º de venda" not in df.columns:
-        raise ValueError("Planilha não está no formato esperado: coluna 'N.º de venda' não encontrada.")
+        raise ValueError(
+            "Planilha não está no formato esperado: coluna 'N.º de venda' não encontrada."
+        )
 
     df = df[df["N.º de venda"].notna()]
 
@@ -143,19 +185,18 @@ def importar_vendas_ml(caminho_arquivo, engine: Engine):
             titulo = str(row.get("Título do anúncio") or "").strip()
 
             produto_row = None
-
             if sku:
                 produto_row = conn.execute(
-                    select(produtos.c.id, produtos.c.custo_unitario)
-                    .where(produtos.c.sku == sku)
+                    select(produtos.c.id, produtos.c.custo_unitario).where(
+                        produtos.c.sku == sku
+                    )
                 ).mappings().first()
-            else:
-                # tenta pelo nome do produto = título do anúncio
-                if titulo:
-                    produto_row = conn.execute(
-                        select(produtos.c.id, produtos.c.custo_unitario)
-                        .where(produtos.c.nome == titulo)
-                    ).mappings().first()
+            if not produto_row and titulo:
+                produto_row = conn.execute(
+                    select(produtos.c.id, produtos.c.custo_unitario).where(
+                        produtos.c.nome == titulo
+                    )
+                ).mappings().first()
 
             if not sku and not produto_row:
                 vendas_sem_sku += 1
@@ -168,31 +209,32 @@ def importar_vendas_ml(caminho_arquivo, engine: Engine):
             produto_id = produto_row["id"]
             custo_unitario = float(produto_row["custo_unitario"] or 0.0)
 
-            data_venda_raw = row.get("Data da venda")
-            data_venda = parse_data_venda(data_venda_raw)
+            data_venda = parse_data_venda(row.get("Data da venda"))
             unidades = row.get("Unidades")
             try:
                 unidades = int(unidades) if unidades == unidades else 0
             except Exception:
                 unidades = 0
 
-            total_brl = row.get("Total (BRL)")
-            try:
-                receita_total = float(total_brl) if total_brl == total_brl else 0.0
-            except Exception:
-                receita_total = 0.0
+            # Receita BRUTA (coluna H)
+            receita_total = parse_brl(row.get("Receita por produtos (BRL)"))
+            # Comissão / tarifas (coluna K - normalmente negativa)
+            comissao_val = parse_brl(row.get("Tarifa de venda e impostos (BRL)"))
 
-            preco_medio_venda = receita_total / unidades if unidades > 0 else 0.0
+            preco_venda_unitario = receita_total / unidades if unidades > 0 else 0.0
             custo_total = custo_unitario * unidades
-            margem_contribuicao = receita_total - custo_total
+
+            margem_bruta = receita_total - custo_total
+            margem_contribuicao = margem_bruta + comissao_val  # comissao_val negativa
+
             numero_venda_ml = str(row.get("N.º de venda"))
 
             conn.execute(
                 insert(vendas).values(
                     produto_id=produto_id,
-                    data_venda=data_venda.isoformat() if data_venda else None,
+                    data_venda=data_venda,
                     quantidade=unidades,
-                    preco_venda_unitario=preco_medio_venda,
+                    preco_venda_unitario=preco_venda_unitario,
                     receita_total=receita_total,
                     custo_total=custo_total,
                     margem_contribuicao=margem_contribuicao,
@@ -210,7 +252,6 @@ def importar_vendas_ml(caminho_arquivo, engine: Engine):
 
             vendas_importadas += 1
 
-
     return {
         "lote_id": lote_id,
         "vendas_importadas": vendas_importadas,
@@ -219,43 +260,29 @@ def importar_vendas_ml(caminho_arquivo, engine: Engine):
     }
 
 
-def parse_brl(valor):
-    """Converte valores no formato brasileiro (R$ 1.234,56) para float."""
-    if valor is None:
-        return 0.0
-    # Se já for número
-    if isinstance(valor, (int, float)):
-        try:
-            if pd.isna(valor):
-                return 0.0
-        except Exception:
-            pass
-        return float(valor)
-    s = str(valor).strip()
-    if not s:
-        return 0.0
-    s = s.replace("R$", "").replace("\u00a0", "").replace(" ", "")
-    # remove separador de milhar e troca vírgula por ponto
-    s = s.replace(".", "").replace(",", ".")
-    try:
-        return float(s)
-    except ValueError:
-        return 0.0
+# ----------------------------------------------------------------------
+# Importação de template consolidado
+# ----------------------------------------------------------------------
 
 
-def importar_vendas_template(caminho_arquivo, engine: Engine):
-    """Importa vendas a partir do template consolidado (SKU, Título, Quantidade, Receita, Comissao, PrecoMedio)."""
+def importar_vendas_template(caminho_arquivo: str, engine: Engine):
+    """
+    Lê um arquivo no formato:
+      SKU | Título | Quantidade | Receita | Comissao | PrecoMedio
+    """
     lote_id = datetime.now().isoformat(timespec="seconds")
 
-    # tenta ler a aba 'Template'; se não existir, usa a primeira
     try:
         df = pd.read_excel(caminho_arquivo, sheet_name="Template")
     except Exception:
-        df = pd.read_excel(caminho_arquivo, sheet_name=0)
+        df = pd.read_excel(caminho_arquivo)
 
     colunas_obrig = {"SKU", "Título", "Quantidade", "Receita", "Comissao", "PrecoMedio"}
     if not colunas_obrig.issubset(set(df.columns)):
-        raise ValueError("Planilha não está no formato esperado: colunas 'SKU, Título, Quantidade, Receita, Comissao, PrecoMedio' são obrigatórias.")
+        raise ValueError(
+            "Planilha não está no formato esperado. Colunas obrigatórias: "
+            ""'SKU, Título, Quantidade, Receita, Comissao, PrecoMedio'."
+        )
 
     vendas_importadas = 0
     vendas_sem_sku = 0
@@ -276,25 +303,25 @@ def importar_vendas_template(caminho_arquivo, engine: Engine):
                 continue
 
             receita_total = parse_brl(row.get("Receita"))
-            comissao = parse_brl(row.get("Comissao"))
+            comissao_val = parse_brl(row.get("Comissao"))
 
-            # Encontrar produto
             produto_row = None
             if sku:
                 produto_row = conn.execute(
-                    select(produtos.c.id, produtos.c.custo_unitario)
-                    .where(produtos.c.sku == sku)
+                    select(produtos.c.id, produtos.c.custo_unitario).where(
+                        produtos.c.sku == sku
+                    )
                 ).mappings().first()
             if not produto_row and titulo:
                 produto_row = conn.execute(
-                    select(produtos.c.id, produtos.c.custo_unitario)
-                    .where(produtos.c.nome == titulo)
+                    select(produtos.c.id, produtos.c.custo_unitario).where(
+                        produtos.c.nome == titulo
+                    )
                 ).mappings().first()
 
             if not sku and not produto_row:
                 vendas_sem_sku += 1
                 continue
-
             if not produto_row:
                 vendas_sem_produto += 1
                 continue
@@ -303,19 +330,15 @@ def importar_vendas_template(caminho_arquivo, engine: Engine):
             custo_unitario = float(produto_row["custo_unitario"] or 0.0)
 
             custo_total = custo_unitario * quantidade
-
-            # margem antes da comissão
             margem_bruta = receita_total - custo_total
-            # Opção B: reduzir margem pela comissão
-            margem_contribuicao = margem_bruta - comissao
+            margem_contribuicao = margem_bruta - comissao_val  # aqui comissao positiva
 
-            # Opção 2: ignorar PrecoMedio da planilha, calcular pelo total / quantidade
             preco_venda_unitario = receita_total / quantidade if quantidade > 0 else 0.0
 
             conn.execute(
                 insert(vendas).values(
                     produto_id=produto_id,
-                    data_venda=datetime.now().isoformat(),
+                    data_venda=date.today(),
                     quantidade=quantidade,
                     preco_venda_unitario=preco_venda_unitario,
                     receita_total=receita_total,
@@ -342,10 +365,12 @@ def importar_vendas_template(caminho_arquivo, engine: Engine):
         "vendas_sem_produto": vendas_sem_produto,
     }
 
-# --------------------------------------------------------------------
-# Rotas principais
 
-# --------------------------------------------------------------------
+# ----------------------------------------------------------------------
+# Dashboard
+# ----------------------------------------------------------------------
+
+
 @app.route("/")
 def dashboard():
     with engine.connect() as conn:
@@ -365,22 +390,26 @@ def dashboard():
             select(func.coalesce(func.sum(vendas.c.margem_contribuicao), 0))
         ).scalar_one()
 
-        margem_media = conn.execute(
-            select(
-                func.coalesce(
-                    func.avg(
-                        func.nullif(
-                            (vendas.c.margem_contribuicao / vendas.c.receita_total) * 100,
-                            0
-                        )
-                    ),
-                    0
-                )
-            )
-        ).scalar_one()
+        margem_media = 0.0
+        if receita_total > 0:
+            margem_media = (lucro_total / receita_total) * 100.0
 
         ticket_medio = conn.execute(
             select(func.coalesce(func.avg(vendas.c.preco_venda_unitario), 0))
+        ).scalar_one()
+
+        # comissão total = (receita - custo) - margem (margem já pós comissão)
+        comissao_total = conn.execute(
+            select(
+                func.coalesce(
+                    func.sum(
+                        vendas.c.receita_total
+                        - vendas.c.custo_total
+                        - vendas.c.margem_contribuicao
+                    ),
+                    0,
+                )
+            )
         ).scalar_one()
 
         produto_mais_vendido = conn.execute(
@@ -407,7 +436,9 @@ def dashboard():
             .limit(1)
         ).first()
 
-        cfg = conn.execute(select(configuracoes).where(configuracoes.c.id == 1)).mappings().first()
+        cfg = conn.execute(
+            select(configuracoes).where(configuracoes.c.id == 1)
+        ).mappings().first()
 
     return render_template(
         "dashboard.html",
@@ -417,413 +448,258 @@ def dashboard():
         lucro_total=lucro_total,
         margem_media=margem_media,
         ticket_medio=ticket_medio,
-        comissao_total=0,
+        comissao_total=comissao_total,
         produto_mais_vendido=produto_mais_vendido,
         produto_maior_lucro=produto_maior_lucro,
         produto_pior_margem=produto_pior_margem,
         cfg=cfg,
     )
 
-# ---------------- PRODUTOS ----------------
+
+# ----------------------------------------------------------------------
+# Produtos
+# ----------------------------------------------------------------------
+
+
 @app.route("/produtos")
 def lista_produtos():
     with engine.connect() as conn:
-        produtos_rows = conn.execute(select(produtos).order_by(produtos.c.nome)).mappings().all()
-    return render_template("produtos.html", produtos=produtos_rows)
+        rows = conn.execute(
+            select(produtos).order_by(produtos.c.nome)
+        ).mappings().all()
+    return render_template("produtos.html", produtos=rows)
+
 
 @app.route("/produtos/novo", methods=["GET", "POST"])
 def novo_produto():
     if request.method == "POST":
-        nome = request.form["nome"]
-        sku = request.form["sku"]
-        custo_unitario = float(request.form.get("custo_unitario", 0) or 0)
-        preco_venda_sugerido = float(request.form.get("preco_venda_sugerido", 0) or 0)
-        estoque_inicial = int(request.form.get("estoque_inicial", 0) or 0)
+        nome = request.form.get("nome", "").strip()
+        sku = request.form.get("sku", "").strip()
+        custo = parse_brl(request.form.get("custo_unitario"))
+        estoque_inicial = int(request.form.get("estoque_inicial") or 0)
+
+        if not nome:
+            flash("Nome é obrigatório.", "danger")
+            return redirect(url_for("novo_produto"))
 
         with engine.begin() as conn:
             conn.execute(
                 insert(produtos).values(
                     nome=nome,
-                    sku=sku,
-                    custo_unitario=custo_unitario,
-                    preco_venda_sugerido=preco_venda_sugerido,
-                    estoque_inicial=estoque_inicial,
+                    sku=sku or None,
+                    custo_unitario=custo,
                     estoque_atual=estoque_inicial,
                 )
             )
-        flash("Produto cadastrado com sucesso!", "success")
+
+        flash("Produto cadastrado.", "success")
         return redirect(url_for("lista_produtos"))
 
     return render_template("produto_form.html", produto=None)
 
+
 @app.route("/produtos/<int:produto_id>/editar", methods=["GET", "POST"])
 def editar_produto(produto_id):
+    with engine.connect() as conn:
+        produto = conn.execute(
+            select(produtos).where(produtos.c.id == produto_id)
+        ).mappings().first()
+
+    if not produto:
+        flash("Produto não encontrado.", "danger")
+        return redirect(url_for("lista_produtos"))
+
     if request.method == "POST":
-        nome = request.form["nome"]
-        sku = request.form["sku"]
-        custo_unitario = float(request.form.get("custo_unitario", 0) or 0)
-        preco_venda_sugerido = float(request.form.get("preco_venda_sugerido", 0) or 0)
-        estoque_atual = int(request.form.get("estoque_atual", 0) or 0)
+        nome = request.form.get("nome", "").strip()
+        sku = request.form.get("sku", "").strip()
+        custo = parse_brl(request.form.get("custo_unitario"))
+
+        if not nome:
+            flash("Nome é obrigatório.", "danger")
+            return redirect(url_for("editar_produto", produto_id=produto_id))
 
         with engine.begin() as conn:
             conn.execute(
                 update(produtos)
                 .where(produtos.c.id == produto_id)
-                .values(
-                    nome=nome,
-                    sku=sku,
-                    custo_unitario=custo_unitario,
-                    preco_venda_sugerido=preco_venda_sugerido,
-                    estoque_atual=estoque_atual,
-                )
+                .values(nome=nome, sku=sku or None, custo_unitario=custo)
             )
-        flash("Produto atualizado!", "success")
+
+        flash("Produto atualizado.", "success")
         return redirect(url_for("lista_produtos"))
 
+    return render_template("produto_form.html", produto=produto)
+
+
+# ----------------------------------------------------------------------
+# Estoque - ajustes
+# ----------------------------------------------------------------------
+
+
+@app.route("/estoque", methods=["GET", "POST"])
+def ajustes_estoque():
     with engine.connect() as conn:
-        produto_row = conn.execute(
-            select(produtos).where(produtos.c.id == produto_id)
-        ).mappings().first()
-
-    if not produto_row:
-        flash("Produto não encontrado.", "danger")
-        return redirect(url_for("lista_produtos"))
-
-    return render_template("produto_form.html", produto=produto_row)
-
-@app.route("/produtos/<int:produto_id>/excluir", methods=["POST"])
-def excluir_produto(produto_id):
-    with engine.begin() as conn:
-        conn.execute(delete(produtos).where(produtos.c.id == produto_id))
-    flash("Produto excluído.", "success")
-    return redirect(url_for("lista_produtos"))
-
-# ---------------- VENDAS ----------------
-@app.route("/vendas")
-def lista_vendas():
-    with engine.connect() as conn:
-        vendas_rows = conn.execute(
-            select(
-                vendas.c.id,
-                vendas.c.data_venda,
-                vendas.c.quantidade,
-                vendas.c.preco_venda_unitario,
-                vendas.c.receita_total,
-                vendas.c.margem_contribuicao,
-                vendas.c.origem,
-                vendas.c.numero_venda_ml,
-                vendas.c.lote_importacao,
-                produtos.c.nome,
-            )
-            .select_from(vendas.join(produtos))
-            .order_by(vendas.c.data_venda.desc(), vendas.c.id.desc())
+        lista = conn.execute(
+            select(produtos).order_by(produtos.c.nome)
         ).mappings().all()
 
-        lotes = conn.execute(
-            select(
-                vendas.c.lote_importacao.label("lote_importacao"),
-                func.count().label("qtd_vendas"),
-                func.coalesce(func.sum(vendas.c.receita_total), 0).label("receita_lote"),
-            )
-            .where(vendas.c.lote_importacao.isnot(None))
-            .group_by(vendas.c.lote_importacao)
-            .order_by(vendas.c.lote_importacao.desc())
-        ).mappings().all()
-
-        produtos_rows = conn.execute(
-            select(produtos.c.id, produtos.c.nome).order_by(produtos.c.nome)
-        ).mappings().all()
-
-    return render_template("vendas.html", vendas=vendas_rows, lotes=lotes, produtos=produtos_rows)
-
-@app.route("/vendas/manual", methods=["POST"])
-def criar_venda_manual():
-    produto_id = int(request.form["produto_id"])
-    quantidade = int(request.form.get("quantidade", 0) or 0)
-    preco_unit = float(request.form.get("preco_venda_unitario", 0) or 0)
-    data_venda_str = request.form.get("data_venda") or datetime.now().isoformat()
-
-    with engine.begin() as conn:
-        prod = conn.execute(
-            select(produtos.c.custo_unitario).where(produtos.c.id == produto_id)
-        ).mappings().first()
-        custo_unitario = float(prod["custo_unitario"] or 0.0) if prod else 0.0
-
-        receita_total = quantidade * preco_unit
-        custo_total = quantidade * custo_unitario
-        margem_contribuicao = receita_total - custo_total
-
-        conn.execute(
-            insert(vendas).values(
-                produto_id=produto_id,
-                data_venda=data_venda_str,
-                quantidade=quantidade,
-                preco_venda_unitario=preco_unit,
-                receita_total=receita_total,
-                custo_total=custo_total,
-                margem_contribuicao=margem_contribuicao,
-                origem="Manual",
-                numero_venda_ml=None,
-                lote_importacao=None,
-            )
-        )
-
-        conn.execute(
-            update(produtos)
-            .where(produtos.c.id == produto_id)
-            .values(estoque_atual=produtos.c.estoque_atual - quantidade)
-        )
-
-    flash("Venda manual registrada com sucesso!", "success")
-    return redirect(url_for("lista_vendas"))
-
-@app.route("/vendas/<int:venda_id>/editar", methods=["GET", "POST"])
-def editar_venda(venda_id):
     if request.method == "POST":
-        quantidade = int(request.form["quantidade"])
-        preco_venda_unitario = float(request.form["preco_venda_unitario"])
-        custo_total = float(request.form["custo_total"])
+        produto_id = int(request.form.get("produto_id") or 0)
+        tipo = request.form.get("tipo")
+        quantidade = int(request.form.get("quantidade") or 0)
 
-        receita_total = quantidade * preco_venda_unitario
-        margem_contribuicao = receita_total - custo_total
+        if not produto_id or not tipo or quantidade <= 0:
+            flash("Preencha produto, tipo e quantidade.", "danger")
+            return redirect(url_for("ajustes_estoque"))
+
+        delta = quantidade if tipo == "entrada" else -quantidade
 
         with engine.begin() as conn:
             conn.execute(
-                update(vendas)
-                .where(vendas.c.id == venda_id)
-                .values(
-                    quantidade=quantidade,
-                    preco_venda_unitario=preco_venda_unitario,
-                    receita_total=receita_total,
-                    margem_contribuicao=margem_contribuicao,
-                )
+                update(produtos)
+                .where(produtos.c.id == produto_id)
+                .values(estoque_atual=produtos.c.estoque_atual + delta)
             )
-        flash("Venda atualizada com sucesso!", "success")
-        return redirect(url_for("lista_vendas"))
 
-    with engine.connect() as conn:
-        venda_row = conn.execute(
-            select(
-                vendas.c.id,
-                vendas.c.data_venda,
-                vendas.c.quantidade,
-                vendas.c.preco_venda_unitario,
-                vendas.c.custo_total,
-                produtos.c.nome,
-            )
-            .select_from(vendas.join(produtos))
-            .where(vendas.c.id == venda_id)
-        ).mappings().first()
+        flash("Ajuste de estoque registrado.", "success")
+        return redirect(url_for("ajustes_estoque"))
 
-    if not venda_row:
-        flash("Venda não encontrada.", "danger")
-        return redirect(url_for("lista_vendas"))
+    return render_template("estoque.html", produtos=lista)
 
-    return render_template("editar_venda.html", venda=venda_row)
 
-@app.route("/vendas/<int:venda_id>/excluir", methods=["POST"])
-def excluir_venda(venda_id):
-    with engine.begin() as conn:
-        conn.execute(delete(vendas).where(vendas.c.id == venda_id))
-    flash("Venda excluída com sucesso!", "success")
-    return redirect(url_for("lista_vendas"))
+# ----------------------------------------------------------------------
+# Importar vendas (ML / Template)
+# ----------------------------------------------------------------------
 
-@app.route("/vendas/lote/<lote_id>/excluir", methods=["POST"])
-def excluir_lote_vendas(lote_id):
-    with engine.begin() as conn:
-        conn.execute(delete(vendas).where(vendas.c.lote_importacao == lote_id))
-    flash("Lote de importação excluído com sucesso!", "success")
-    return redirect(url_for("lista_vendas"))
 
-# ---------------- IMPORT / EXPORT ----------------
 @app.route("/importar_ml", methods=["GET", "POST"])
 def importar_ml_view():
     if request.method == "POST":
-        if "arquivo" not in request.files:
-            flash("Nenhum arquivo enviado.", "danger")
-            return redirect(request.url)
-        file = request.files["arquivo"]
-        if file.filename == "":
+        tipo = request.form.get("tipo")  # "ml" ou "template"
+        file = request.files.get("arquivo")
+
+        if not file or file.filename == "":
             flash("Selecione um arquivo.", "danger")
-            return redirect(request.url)
+            return redirect(url_for("importar_ml_view"))
+
         filename = secure_filename(file.filename)
         caminho = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         file.save(caminho)
 
         try:
-            resumo = importar_vendas_ml(caminho, engine)
-            flash(
-                f"Importação concluída. Lote {resumo['lote_id']} - "
-                f"{resumo['vendas_importadas']} vendas importadas, "
-                f"{resumo['vendas_sem_sku']} sem SKU/Título, "
-                f"{resumo['vendas_sem_produto']} sem produto cadastrado.",
-                "success",
-            )
+            if tipo == "ml":
+                resumo = importar_vendas_ml(caminho, engine)
+                flash(
+                    f"Importação Vendas BR concluída. Lote {resumo['lote_id']} - "
+                    f"{resumo['vendas_importadas']} vendas importadas, "
+                    f"{resumo['vendas_sem_sku']} sem SKU, "
+                    f"{resumo['vendas_sem_produto']} sem produto cadastrado.",
+                    "success",
+                )
+            elif tipo == "template":
+                resumo = importar_vendas_template(caminho, engine)
+                flash(
+                    f"Importação template concluída. Lote {resumo['lote_id']} - "
+                    f"{resumo['vendas_importadas']} vendas importadas, "
+                    f"{resumo['vendas_sem_sku']} sem SKU, "
+                    f"{resumo['vendas_sem_produto']} sem produto cadastrado.",
+                    "success",
+                )
+            else:
+                flash("Tipo de importação inválido.", "danger")
         except Exception as e:
             flash(f"Erro na importação: {e}", "danger")
+
         return redirect(url_for("importar_ml_view"))
 
     return render_template("importar_ml.html")
 
 
-@app.route("/importar_template", methods=["POST"])
-def importar_template():
-    """Importa vendas a partir do template consolidado preenchido manualmente."""
-    if "arquivo_template" not in request.files:
-        flash("Nenhum arquivo enviado para o template.", "danger")
-        return redirect(url_for("importar_ml_view"))
-    file = request.files["arquivo_template"]
-    if file.filename == "":
-        flash("Selecione um arquivo para o template.", "danger")
-        return redirect(url_for("importar_ml_view"))
-    filename = secure_filename(file.filename)
-    caminho = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-    file.save(caminho)
-
-    try:
-        resumo = importar_vendas_template(caminho, engine)
-        flash(
-            f"Template importado. Lote {resumo['lote_id']} - "
-            f"{resumo['vendas_importadas']} vendas importadas, "
-            f"{resumo['vendas_sem_sku']} linhas sem SKU/Título, "
-            f"{resumo['vendas_sem_produto']} sem produto cadastrado.",
-            "success",
-        )
-    except Exception as e:
-        flash(f"Erro na importação pelo template: {e}", "danger")
-    return redirect(url_for("importar_ml_view"))
+# ----------------------------------------------------------------------
+# Vendas - manual
+# ----------------------------------------------------------------------
 
 
-@app.route("/exportar_consolidado")
-def exportar_consolidado():
-    """Exporta planilha de consolidação das vendas."""
+@app.route("/vendas")
+def lista_vendas():
     with engine.connect() as conn:
         rows = conn.execute(
             select(
-                vendas.c.id.label("ID Venda"),
-                vendas.c.data_venda.label("Data venda"),
-                produtos.c.nome.label("Produto"),
-                produtos.c.sku.label("SKU"),
-                vendas.c.quantidade.label("Quantidade"),
-                vendas.c.preco_venda_unitario.label("Preço unitário"),
-                vendas.c.receita_total.label("Receita total"),
-                vendas.c.custo_total.label("Custo total"),
-                vendas.c.margem_contribuicao.label("Margem contribuição"),
-                vendas.c.origem.label("Origem"),
-                vendas.c.numero_venda_ml.label("Nº venda ML"),
-                vendas.c.lote_importacao.label("Lote importação"),
-            ).select_from(vendas.join(produtos))
+                vendas.c.id,
+                vendas.c.data_venda,
+                vendas.c.quantidade,
+                vendas.c.receita_total,
+                vendas.c.custo_total,
+                vendas.c.margem_contribuicao,
+                vendas.c.origem,
+                produtos.c.nome.label("produto_nome"),
+            )
+            .select_from(vendas.join(produtos))
+            .order_by(vendas.c.data_venda.desc(), vendas.c.id.desc())
         ).mappings().all()
-
-    df = pd.DataFrame(rows)
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Consolidado")
-    output.seek(0)
-
-    return send_file(
-        output,
-        as_attachment=True,
-        download_name=f"consolidado_vendas_{datetime.now().date()}.xlsx",
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+    return render_template("vendas.html", vendas=rows)
 
 
-
-@app.route("/exportar_template")
-def exportar_template():
-    """Exporta o modelo de planilha para preenchimento manual (SKU, Título, Quantidade, Receita, Comissao, PrecoMedio)."""
-    cols = ["SKU", "Título", "Quantidade", "Receita", "Comissao", "PrecoMedio"]
-    df = pd.DataFrame(columns=cols)
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Template")
-    output.seek(0)
-    return send_file(
-        output,
-        as_attachment=True,
-        download_name="template_consolidacao_vendas.xlsx",
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-
-# ---------------- ESTOQUE / AJUSTES ----------------
-@app.route("/estoque")
-def estoque_view():
+@app.route("/vendas/nova", methods=["GET", "POST"])
+def nova_venda():
     with engine.connect() as conn:
-        produtos_rows = conn.execute(
-            select(
-                produtos.c.id,
-                produtos.c.nome,
-                produtos.c.sku,
-                produtos.c.estoque_atual,
-                produtos.c.custo_unitario,
-            ).order_by(produtos.c.nome)
+        lista_prod = conn.execute(
+            select(produtos).order_by(produtos.c.nome)
         ).mappings().all()
-    return render_template("estoque.html", produtos=produtos_rows)
 
-@app.route("/estoque/ajuste", methods=["POST"])
-def ajuste_estoque():
-    produto_id = int(request.form["produto_id"])
-    tipo = request.form["tipo"]  # entrada ou saida
-    quantidade = int(request.form.get("quantidade", 0) or 0)
-    custo_unitario = request.form.get("custo_unitario")
-    observacao = request.form.get("observacao") or ""
+    if request.method == "POST":
+        produto_id = int(request.form.get("produto_id") or 0)
+        data_venda = parse_data_venda(request.form.get("data_venda")) or date.today()
+        quantidade = int(request.form.get("quantidade") or 0)
+        preco_unitario = parse_brl(request.form.get("preco_unitario"))
 
-    custo_unitario_val = float(custo_unitario) if custo_unitario not in (None, "",) else None
+        if not produto_id or quantidade <= 0 or preco_unitario <= 0:
+            flash("Preencha produto, quantidade e preço.", "danger")
+            return redirect(url_for("nova_venda"))
 
-    fator = 1 if tipo == "entrada" else -1
+        with engine.begin() as conn:
+            prod = conn.execute(
+                select(produtos.c.custo_unitario).where(produtos.c.id == produto_id)
+            ).first()
+            if not prod:
+                flash("Produto não encontrado.", "danger")
+                return redirect(url_for("nova_venda"))
 
-    with engine.begin() as conn:
-        if custo_unitario_val is not None:
+            custo_unitario = float(prod[0] or 0.0)
+
+            receita_total = preco_unitario * quantidade
+            custo_total = custo_unitario * quantidade
+            margem_contribuicao = receita_total - custo_total  # sem comissão
+
+            conn.execute(
+                insert(vendas).values(
+                    produto_id=produto_id,
+                    data_venda=data_venda,
+                    quantidade=quantidade,
+                    preco_venda_unitario=preco_unitario,
+                    receita_total=receita_total,
+                    custo_total=custo_total,
+                    margem_contribuicao=margem_contribuicao,
+                    origem="Manual",
+                )
+            )
+
             conn.execute(
                 update(produtos)
                 .where(produtos.c.id == produto_id)
-                .values(custo_unitario=custo_unitario_val)
+                .values(estoque_atual=produtos.c.estoque_atual - quantidade)
             )
 
-        conn.execute(
-            update(produtos)
-            .where(produtos.c.id == produto_id)
-            .values(estoque_atual=produtos.c.estoque_atual + fator * quantidade)
-        )
+        flash("Venda registrada.", "success")
+        return redirect(url_for("lista_vendas"))
 
-        conn.execute(
-            insert(ajustes_estoque).values(
-                produto_id=produto_id,
-                data_ajuste=datetime.now().isoformat(),
-                tipo=tipo,
-                quantidade=quantidade,
-                custo_unitario=custo_unitario_val,
-                observacao=observacao,
-            )
-        )
+    return render_template("venda_form.html", produtos=lista_prod)
 
-    flash("Ajuste de estoque registrado!", "success")
-    return redirect(url_for("estoque_view"))
 
-# ---------------- CONFIGURAÇÕES ----------------
-@app.route("/configuracoes", methods=["GET", "POST"])
-def configuracoes_view():
-    if request.method == "POST":
-        imposto_percent = float(request.form.get("imposto_percent", 0) or 0)
-        despesas_percent = float(request.form.get("despesas_percent", 0) or 0)
-        with engine.begin() as conn:
-            conn.execute(
-                update(configuracoes)
-                .where(configuracoes.c.id == 1)
-                .values(imposto_percent=imposto_percent, despesas_percent=despesas_percent)
-            )
-        flash("Configurações salvas!", "success")
-        return redirect(url_for("configuracoes_view"))
+# ----------------------------------------------------------------------
+# Relatório de lucro
+# ----------------------------------------------------------------------
 
-    with engine.connect() as conn:
-        cfg = conn.execute(
-            select(configuracoes).where(configuracoes.c.id == 1)
-        ).mappings().first()
-
-    return render_template("configuracoes.html", cfg=cfg)
-
-# ---------------- RELATÓRIO LUCRO ----------------
 
 @app.route("/relatorio_lucro")
 def relatorio_lucro():
@@ -850,33 +726,48 @@ def relatorio_lucro():
 
     linhas = []
     total_qtd = total_receita = total_custo = total_margem = 0.0
-    total_impostos = total_despesas = total_lucro_liquido = 0.0
+    total_comissao = total_impostos = total_despesas = total_lucro_liquido = 0.0
 
     for row in linhas_db:
-        receita = float(row["receita"] or 0)
-        custo = float(row["custo"] or 0)
-        margem = float(row["margem"] or 0)
+        receita = float(row["receita"] or 0.0)
+        custo = float(row["custo"] or 0.0)
+        margem = float(row["margem"] or 0.0)  # já pós comissão
         qtd = int(row["qtd"] or 0)
 
+        # comissão positiva: (receita - custo) - margem_pós_comissão
+        comissao = (receita - custo) - margem
+        if comissao < 0:
+            comissao = 0.0
+
+        receita_liquida = receita - comissao
+
+        # imposto sobre valor bruto
         impostos = receita * imposto_percent / 100.0
-        despesas = receita * despesas_percent / 100.0
+        # despesas sobre valor líquido
+        despesas = receita_liquida * despesas_percent / 100.0
+
         lucro_liquido = margem - impostos - despesas
 
-        linhas.append({
-            "nome": row["nome"],
-            "qtd": qtd,
-            "receita": receita,
-            "custo": custo,
-            "margem": margem,
-            "impostos": impostos,
-            "despesas": despesas,
-            "lucro_liquido": lucro_liquido,
-        })
+        linhas.append(
+            {
+                "nome": row["nome"],
+                "qtd": qtd,
+                "receita": receita,
+                "custo": custo,
+                "margem": margem,
+                "comissao": comissao,
+                "receita_liquida": receita_liquida,
+                "impostos": impostos,
+                "despesas": despesas,
+                "lucro_liquido": lucro_liquido,
+            }
+        )
 
         total_qtd += qtd
         total_receita += receita
         total_custo += custo
         total_margem += margem
+        total_comissao += comissao
         total_impostos += impostos
         total_despesas += despesas
         total_lucro_liquido += lucro_liquido
@@ -886,15 +777,54 @@ def relatorio_lucro():
         "receita": total_receita,
         "custo": total_custo,
         "margem": total_margem,
+        "comissao": total_comissao,
         "impostos": total_impostos,
         "despesas": total_despesas,
         "lucro_liquido": total_lucro_liquido,
     }
 
-    return render_template("relatorio_lucro.html", linhas=linhas, totais=totais,
-                           imposto_percent=imposto_percent, despesas_percent=despesas_percent)
+    return render_template(
+        "relatorio_lucro.html",
+        linhas=linhas,
+        totais=totais,
+        imposto_percent=imposto_percent,
+        despesas_percent=despesas_percent,
+    )
+
+
+# ----------------------------------------------------------------------
+# Configurações
+# ----------------------------------------------------------------------
+
+
+@app.route("/configuracoes", methods=["GET", "POST"])
+def configuracoes_view():
+    if request.method == "POST":
+        imposto = parse_brl(request.form.get("imposto_percent"))
+        despesas = parse_brl(request.form.get("despesas_percent"))
+
+        with engine.begin() as conn:
+            conn.execute(
+                update(configuracoes)
+                .where(configuracoes.c.id == 1)
+                .values(imposto_percent=imposto, despesas_percent=despesas)
+            )
+
+        flash("Configurações salvas.", "success")
+        return redirect(url_for("configuracoes_view"))
+
+    with engine.connect() as conn:
+        cfg = conn.execute(
+            select(configuracoes).where(configuracoes.c.id == 1)
+        ).mappings().first()
+
+    return render_template("configuracoes.html", cfg=cfg)
+
+
+# ----------------------------------------------------------------------
+# Main (para rodar local)
+# ----------------------------------------------------------------------
 
 
 if __name__ == "__main__":
-    init_db()
-    app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    app.run(host="0.0.0.0", port=5000, debug=True)
